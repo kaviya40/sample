@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Recon Engine Daily Report (Cross-Browser Sync)</title>
+<title>Recon Engine Daily Report (Live Shared)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -12,10 +12,7 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:#fff;border-radius:10px;padding:10px 16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
 .header-left h1{font-size:15px;font-weight:700;color:#1a1a2e;}
 .header-left .subtitle{font-size:10px;color:#94a3b8;margin-top:1px;}
-.sync-status{font-size:9px;padding:3px 8px;border-radius:12px;background:#f1f5f9;color:#64748b;display:flex;align-items:center;gap:5px;}
-.sync-status.synced{background:#d1fae5;color:#059669;}
-.sync-status.syncing{background:#fef3c7;color:#d97706;}
-.sync-status.error{background:#fee2e2;color:#dc2626;}
+.sync-status{font-size:9px;padding:3px 8px;border-radius:12px;background:#d1fae5;color:#059669;display:flex;align-items:center;gap:5px;}
 .tab-btns{display:flex;gap:6px;}
 .tab-btn{padding:5px 18px;border-radius:6px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#64748b;cursor:pointer;font-size:11px;font-weight:600;transition:all 0.15s;}
 .tab-btn.h-active{background:#1e3a5f;border-color:#2563eb;color:#fff;}
@@ -116,6 +113,9 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .modal-section{font-size:10px;font-weight:700;color:#2563eb;background:#eff6ff;padding:5px 8px;border-radius:5px;margin:10px 0 5px;}
 .import-section{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:10px;}
 .import-section textarea{width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:6px;font-family:monospace;font-size:10px;margin-top:5px;}
+.setup-guide{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;margin-bottom:10px;font-size:10px;}
+.setup-guide a{color:#2563eb;}
+.setup-guide code{background:#e2e8f0;padding:2px 4px;border-radius:4px;}
 canvas{max-height:90px;}
 </style>
 </head>
@@ -127,11 +127,24 @@ canvas{max-height:90px;}
     <div class="subtitle" id="report_subtitle"></div>
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
-    <div class="sync-status" id="syncStatus">☁️ Synced</div>
+    <div class="sync-status" id="syncStatus">🔴 Setup Required</div>
     <div class="tab-btns">
       <div class="tab-btn h-active" id="tab_H" onclick="switchTab('H')">H Recon</div>
       <div class="tab-btn" id="tab_P15" onclick="switchTab('P15')">P15 Recon</div>
     </div>
+  </div>
+</div>
+
+<div class="setup-guide" id="setupGuide">
+  <strong>⚠️ REAL-TIME SHARING SETUP (1-time, 2 minutes):</strong><br/>
+  1. Click <a href="https://sheets.new" target="_blank">Google Sheets</a> → Create new spreadsheet<br/>
+  2. Click <strong>Extensions → Apps Script</strong><br/>
+  3. Delete default code → Paste code from <strong><span id="scriptLink">(see instructions)</span></strong><br/>
+  4. Click <strong>Deploy → New deployment</strong> → Type: "Web app" → Execute as: "Me" → Access: "Anyone"<br/>
+  5. Copy the URL → Paste below → Click "Connect"<br/>
+  <div style="margin-top:8px;display:flex;gap:6px;">
+    <input type="text" id="webAppUrl" placeholder="Paste your Google Apps Script URL here" style="flex:1;padding:6px;border:1px solid #e2e8f0;border-radius:6px;font-size:10px;"/>
+    <button onclick="connectToGoogleSheets()" style="background:#059669;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;">🔗 Connect</button>
   </div>
 </div>
 
@@ -153,7 +166,7 @@ canvas{max-height:90px;}
     <div class="field-group"><label>Core Receipt</label><input type="number" id="inp_core" placeholder="0" min="0"/></div>
     <div class="field-group"><label>Invoice Received</label><input type="number" id="inp_inv_r" placeholder="0" min="0"/></div>
     <div class="field-group"><label>Invoice Dispatched</label><input type="number" id="inp_inv_d" placeholder="0" min="0"/></div>
-    <button class="btn-save" id="saveBtn" onclick="saveDay()">💾 Save</button>
+    <button class="btn-save" id="saveBtn" onclick="saveDay()">💾 Save & Share</button>
     <div id="modified_info"></div>
   </div>
   <div class="summary-card">
@@ -225,9 +238,7 @@ canvas{max-height:90px;}
   <div class="monthly-title">📅 Monthly Summary</div>
   <div style="overflow-x:auto">
     <table class="monthly-table" id="monthly_table">
-      <thead>
-        <tr><th>Month</th><th>Days</th><th>Core</th><th>Rec</th><th>Disp</th><th>C.Avg</th><th>I.Avg</th></tr>
-      </thead>
+      <thead><tr><th>Month</th><th>Days</th><th>Core</th><th>Rec</th><th>Disp</th><th>C.Avg</th><th>I.Avg</th></tr></thead>
       <tbody id="monthly_table_body"></tbody>
     </table>
   </div>
@@ -236,7 +247,7 @@ canvas{max-height:90px;}
 <div class="actions-row">
   <button class="btn-action btn-view" onclick="openAllData()">📄 View All Data</button>
   <button class="btn-action btn-excel" onclick="exportExcelInfo()">⬇ Download Excel (.xlsx)</button>
-  <button class="btn-action btn-sync-manual" onclick="manualSync()">🔄 Manual Sync</button>
+  <button class="btn-action btn-sync-manual" onclick="manualSync()">🔄 Refresh</button>
 </div>
 
 <div class="share-card">
@@ -245,18 +256,6 @@ canvas{max-height:90px;}
   <div class="share-btns">
     <div class="btn-wa" onclick="shareWA()">📱 WhatsApp</div>
     <div class="btn-email" onclick="shareEmail()">📧 Email</div>
-  </div>
-</div>
-
-<div class="import-section">
-  <div style="font-size:10px;font-weight:700;color:#059669;margin-bottom:5px;">📥 Share Data Between Browsers</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-    <button class="btn-action" style="background:#059669;color:#fff;padding:6px;" onclick="exportToClipboard()">📋 Copy All Data (Export)</button>
-    <button class="btn-action" style="background:#7c3aed;color:#fff;padding:6px;" onclick="showImportDialog()">📋 Import Data</button>
-  </div>
-  <div id="importArea" style="display:none;margin-top:8px;">
-    <textarea id="importData" rows="3" placeholder="Paste exported data here..."></textarea>
-    <button class="btn-save" style="margin-top:5px;" onclick="importFromText()">Import & Sync</button>
   </div>
 </div>
 
@@ -271,14 +270,32 @@ canvas{max-height:90px;}
 </div>
 
 <script>
-// ================ CROSS-BROWSER SYNC USING GITHUB GIST API (FREE & WORKING) ================
-// Using GitHub Gist as free cloud storage - Create your own gist at https://gist.github.com
+// Apps Script code to copy/paste (Google Sheets backend)
+const APPS_SCRIPT_CODE = `function doGet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
 
-// IMPORTANT: You need to create a GitHub Gist and replace these values:
-// Go to https://gist.github.com -> Create a new gist (name it recon-data.json)
-// Then click "Create public gist" and get the GIST_ID from URL (the random string)
-// Then create a Personal Access Token at: https://github.com/settings/tokens/new (select "gist" scope)
-// For demo, we'll use localStorage + manual export/import which ALWAYS works
+function doPost(e) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const data = JSON.parse(e.postData.contents);
+    sheet.clear();
+    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    return ContentService.createTextOutput(JSON.stringify({success: true})).setMimeType(ContentService.MimeType.JSON);
+  } catch(error) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: error.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+document.getElementById('scriptLink').innerHTML = `<a href="#" onclick="showScriptCode();return false;">📋 Click to copy code</a>`;
+
+function showScriptCode() {
+  const code = APPS_SCRIPT_CODE;
+  navigator.clipboard.writeText(code);
+  alert('✅ Apps Script code copied!\n\n1. Go to Extensions → Apps Script\n2. Delete default code\n3. Paste (Ctrl+V)\n4. Click Deploy → New deployment\n5. Type: Web app → Execute as: Me → Access: Anyone\n6. Copy the URL and paste in the box above');
+}
 
 let activeTab = 'H';
 let today = new Date();
@@ -286,173 +303,207 @@ let viewYear = today.getFullYear();
 let viewMonth = today.getMonth();
 let selectedDate = '';
 let store = { H: {}, P15: {} };
+let webAppUrl = localStorage.getItem('googleSheetsUrl') || '';
 
-// Initialize with sample data
-function initializeSampleData() {
-    const nowDate = new Date();
-    const y = nowDate.getFullYear();
-    const m = nowDate.getMonth();
-    const dummyDate1 = `${y}-${String(m+1).padStart(2,'0')}-01`;
-    const dummyDate2 = `${y}-${String(m+1).padStart(2,'0')}-02`;
-    const dummyDate3 = `${y}-${String(m+1).padStart(2,'0')}-03`;
-    
-    if (!store.H[dummyDate1]) {
-        store.H[dummyDate1] = { core: 29, inv_r: 0, inv_d: 0, ts: new Date(y, m, 1).toISOString(), log: [] };
+// Convert store to 2D array for Google Sheets
+function storeToArray() {
+  const rows = [['Type', 'Date', 'Core', 'InvReceived', 'InvDispatched', 'Timestamp', 'Log']];
+  for (const type of ['H', 'P15']) {
+    for (const [date, data] of Object.entries(store[type] || {})) {
+      rows.push([type, date, data.core, data.inv_r, data.inv_d, data.ts, JSON.stringify(data.log || [])]);
     }
-    if (!store.H[dummyDate2]) {
-        store.H[dummyDate2] = { core: 5, inv_r: 21, inv_d: 21, ts: new Date(y, m, 2).toISOString(), log: [] };
-    }
-    if (!store.H[dummyDate3]) {
-        store.H[dummyDate3] = { core: 0, inv_r: 20, inv_d: 21, ts: new Date(y, m, 3).toISOString(), log: [] };
-    }
+  }
+  return rows;
 }
 
-// Load from localStorage
-function loadFromLocal() {
-    const savedH = localStorage.getItem('recon_v2_H');
-    const savedP = localStorage.getItem('recon_v2_P15');
-    if (savedH && savedP) {
-        store = { H: JSON.parse(savedH), P15: JSON.parse(savedP) };
-    } else {
-        initializeSampleData();
-        saveToLocal();
+// Convert array back to store
+function arrayToStore(data) {
+  const newStore = { H: {}, P15: {} };
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row && row[0] && row[1]) {
+      const type = row[0];
+      const date = row[1];
+      newStore[type][date] = {
+        core: row[2] || 0,
+        inv_r: row[3] || 0,
+        inv_d: row[4] || 0,
+        ts: row[5] || new Date().toISOString(),
+        log: row[6] ? JSON.parse(row[6]) : []
+      };
     }
+  }
+  return newStore;
 }
 
-// Save to localStorage
-function saveToLocal() {
-    localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
-    localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
-    updateSyncStatus('synced', 'Saved locally');
-}
-
-// Update sync status display
-function updateSyncStatus(status, message) {
-    const el = document.getElementById('syncStatus');
-    if (status === 'synced') {
-        el.innerHTML = '✓ Synced';
-        el.className = 'sync-status synced';
-    } else if (status === 'syncing') {
-        el.innerHTML = '⟳ Syncing...';
-        el.className = 'sync-status syncing';
-    } else if (status === 'error') {
-        el.innerHTML = '⚠ ' + (message || 'Error');
-        el.className = 'sync-status error';
-    }
-}
-
-// Export all data to clipboard (for sharing between browsers)
-function exportToClipboard() {
-    const exportData = {
-        version: '1.0',
-        timestamp: new Date().toISOString(),
-        H: store.H,
-        P15: store.P15
-    };
-    const jsonStr = JSON.stringify(exportData, null, 2);
-    navigator.clipboard.writeText(jsonStr).then(() => {
-        updateSyncStatus('synced', 'Copied to clipboard!');
-        alert('✅ Data copied to clipboard!\n\nGo to another browser → Click "Import Data" → Paste → Import');
-        setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
-    }).catch(() => {
-        alert('Please manually copy the data below:');
-        prompt('Copy this data:', jsonStr);
+// Save to Google Sheets
+async function saveToGoogleSheets() {
+  if (!webAppUrl) {
+    updateSyncStatus('error', 'Not connected');
+    return false;
+  }
+  try {
+    updateSyncStatus('syncing', 'Saving...');
+    const data = storeToArray();
+    const response = await fetch(webAppUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
     });
+    if (response.ok) {
+      updateSyncStatus('synced', 'Saved to cloud');
+      localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+      localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+      return true;
+    }
+  } catch (error) {
+    console.error('Save error:', error);
+    updateSyncStatus('error', 'Save failed');
+    return false;
+  }
 }
 
-// Show import dialog
-function showImportDialog() {
-    const importArea = document.getElementById('importArea');
-    if (importArea.style.display === 'none' || !importArea.style.display) {
-        importArea.style.display = 'block';
-    } else {
-        importArea.style.display = 'none';
+// Load from Google Sheets
+async function loadFromGoogleSheets() {
+  if (!webAppUrl) {
+    updateSyncStatus('error', 'Not connected');
+    return false;
+  }
+  try {
+    updateSyncStatus('syncing', 'Loading...');
+    const response = await fetch(webAppUrl);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        store = arrayToStore(data);
+        localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+        localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+        updateSyncStatus('synced', 'Loaded from cloud');
+        renderAll();
+        return true;
+      }
     }
+  } catch (error) {
+    console.error('Load error:', error);
+    updateSyncStatus('error', 'Load failed');
+    return false;
+  }
 }
 
-// Import data from text
-function importFromText() {
-    const text = document.getElementById('importData').value;
-    if (!text) {
-        alert('Please paste exported data first');
-        return;
-    }
-    try {
-        const imported = JSON.parse(text);
-        if (imported.H && imported.P15) {
-            store = { H: imported.H, P15: imported.P15 };
-            saveToLocal();
-            renderAll();
-            updateSyncStatus('synced', 'Import successful!');
-            document.getElementById('importData').value = '';
-            document.getElementById('importArea').style.display = 'none';
-            alert('✅ Data imported successfully!\nAll changes are now visible in this browser.');
-        } else {
-            alert('Invalid data format. Please copy the correct export data.');
-        }
-    } catch (e) {
-        alert('Error parsing data. Please make sure you copied the complete JSON data.');
-    }
+// Connect to Google Sheets
+function connectToGoogleSheets() {
+  const url = document.getElementById('webAppUrl').value.trim();
+  if (url && (url.startsWith('https://script.google.com/') || url.startsWith('https://script.googleusercontent.com/'))) {
+    webAppUrl = url;
+    localStorage.setItem('googleSheetsUrl', url);
+    document.getElementById('setupGuide').style.display = 'none';
+    updateSyncStatus('syncing', 'Connecting...');
+    loadFromGoogleSheets().then(() => {
+      if (!store.H || Object.keys(store.H).length === 0) {
+        initializeSampleData();
+        saveToGoogleSheets();
+      }
+      renderAll();
+    });
+  } else {
+    alert('Please enter a valid Google Apps Script Web App URL (starts with https://script.google.com/)');
+  }
 }
 
-// Manual sync button - just reload from localStorage and check for updates (for same browser tabs)
+function updateSyncStatus(status, message) {
+  const el = document.getElementById('syncStatus');
+  if (status === 'synced') {
+    el.innerHTML = '✓ ' + (message || 'Synced');
+    el.className = 'sync-status synced';
+  } else if (status === 'syncing') {
+    el.innerHTML = '⟳ ' + (message || 'Syncing...');
+    el.className = 'sync-status syncing';
+  } else if (status === 'error') {
+    el.innerHTML = '⚠ ' + (message || 'Error');
+    el.className = 'sync-status error';
+  }
+}
+
+function initializeSampleData() {
+  const nowDate = new Date();
+  const y = nowDate.getFullYear();
+  const m = nowDate.getMonth();
+  const dates = [];
+  for (let d = 1; d <= Math.min(10, new Date(y, m+1, 0).getDate()); d++) {
+    dates.push(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+  }
+  
+  dates.forEach((date, idx) => {
+    if (!store.H[date]) {
+      store.H[date] = { core: Math.floor(Math.random() * 30) + 5, inv_r: Math.floor(Math.random() * 25) + 10, inv_d: Math.floor(Math.random() * 25) + 10, ts: new Date().toISOString(), log: [] };
+    }
+    if (!store.P15[date]) {
+      store.P15[date] = { core: Math.floor(Math.random() * 25) + 3, inv_r: Math.floor(Math.random() * 20) + 5, inv_d: Math.floor(Math.random() * 20) + 5, ts: new Date().toISOString(), log: [] };
+    }
+  });
+}
+
 function manualSync() {
-    updateSyncStatus('syncing', 'Syncing...');
+  if (webAppUrl) {
+    loadFromGoogleSheets();
+  } else {
     loadFromLocal();
     renderAll();
-    updateSyncStatus('synced', 'Synced!');
-    setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
+    updateSyncStatus('synced', 'Local mode');
+  }
 }
 
-// Save day entry
-function saveDay() {
-    if (!selectedDate) {
-        alert('Please select a date first');
-        return;
-    }
-    
-    const core = parseInt(document.getElementById('inp_core').value) || 0;
-    const inv_r = parseInt(document.getElementById('inp_inv_r').value) || 0;
-    const inv_d = parseInt(document.getElementById('inp_inv_d').value) || 0;
-    
-    const old = store[activeTab][selectedDate] || { core: null, inv_r: null, inv_d: null, log: [] };
-    const ts = new Date().toISOString();
-    const changes = [];
-    
-    if (old.core === null) {
-        changes.push(`New: Core=${core}, Rec=${inv_r}, Disp=${inv_d}`);
-    } else {
-        if (old.core !== core) changes.push(`Core: ${old.core}→${core}`);
-        if (old.inv_r !== inv_r) changes.push(`Rec: ${old.inv_r}→${inv_r}`);
-        if (old.inv_d !== inv_d) changes.push(`Disp: ${old.inv_d}→${inv_d}`);
-    }
-    
-    const log = old.log || [];
-    if (changes.length > 0) log.push({ ts, changes });
-    
-    store[activeTab][selectedDate] = { core, inv_r, inv_d, ts, log };
-    saveToLocal();
-    
-    // Trigger storage event for other tabs in same browser
-    window.dispatchEvent(new StorageEvent('storage', {
-        key: 'recon_v2_H',
-        newValue: JSON.stringify(store.H)
-    }));
-    
-    renderAll();
-    updateSyncStatus('synced', 'Saved! Use Export to share');
-    setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
+function loadFromLocal() {
+  const savedH = localStorage.getItem('recon_v2_H');
+  const savedP = localStorage.getItem('recon_v2_P15');
+  if (savedH && savedP && JSON.parse(savedH) && Object.keys(JSON.parse(savedH)).length > 0) {
+    store = { H: JSON.parse(savedH), P15: JSON.parse(savedP) };
+  } else {
+    initializeSampleData();
+  }
 }
 
-// Listen for storage events (syncs across tabs in same browser)
-window.addEventListener('storage', function(e) {
-    if (e.key === 'recon_v2_H' || e.key === 'recon_v2_P15') {
-        loadFromLocal();
-        renderAll();
-        updateSyncStatus('synced', 'Updated from another tab');
-        setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
-    }
-});
+async function saveDay() {
+  if (!selectedDate) {
+    alert('Please select a date first');
+    return;
+  }
+  
+  const core = parseInt(document.getElementById('inp_core').value) || 0;
+  const inv_r = parseInt(document.getElementById('inp_inv_r').value) || 0;
+  const inv_d = parseInt(document.getElementById('inp_inv_d').value) || 0;
+  
+  const old = store[activeTab][selectedDate] || { core: null, inv_r: null, inv_d: null, log: [] };
+  const ts = new Date().toISOString();
+  const changes = [];
+  
+  if (old.core === null) {
+    changes.push(`New: Core=${core}, Rec=${inv_r}, Disp=${inv_d}`);
+  } else {
+    if (old.core !== core) changes.push(`Core: ${old.core}→${core}`);
+    if (old.inv_r !== inv_r) changes.push(`Rec: ${old.inv_r}→${inv_r}`);
+    if (old.inv_d !== inv_d) changes.push(`Disp: ${old.inv_d}→${inv_d}`);
+  }
+  
+  const log = old.log || [];
+  if (changes.length > 0) log.push({ ts, changes });
+  
+  store[activeTab][selectedDate] = { core, inv_r, inv_d, ts, log };
+  
+  // Save locally first
+  localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+  localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+  
+  // Save to cloud if connected
+  if (webAppUrl) {
+    await saveToGoogleSheets();
+  } else {
+    updateSyncStatus('synced', 'Saved locally (setup cloud for sharing)');
+  }
+  
+  renderAll();
+}
 
 function formatDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function displayDate(s) { if(!s) return '—'; const p=s.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
@@ -686,15 +737,27 @@ function renderAll() {
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// Initialize
-loadFromLocal();
-renderAll();
-
-// Auto-sync across same browser tabs every 3 seconds
-setInterval(() => {
+// Check if already connected
+if (webAppUrl) {
+    document.getElementById('setupGuide').style.display = 'none';
+    loadFromGoogleSheets().then(() => {
+        if (!store.H || Object.keys(store.H).length === 0) {
+            initializeSampleData();
+            saveToGoogleSheets();
+        }
+        renderAll();
+    });
+} else {
     loadFromLocal();
     renderAll();
-}, 3000);
+}
+
+// Auto-refresh every 10 seconds if connected to cloud
+setInterval(() => {
+    if (webAppUrl) {
+        loadFromGoogleSheets();
+    }
+}, 10000);
 </script>
 </body>
 </html>
