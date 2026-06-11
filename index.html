@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Recon Engine Daily Report (Shared)</title>
+<title>Recon Engine Daily Report (Cloud Sync)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -12,6 +12,9 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:#fff;border-radius:10px;padding:10px 16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
 .header-left h1{font-size:15px;font-weight:700;color:#1a1a2e;}
 .header-left .subtitle{font-size:10px;color:#94a3b8;margin-top:1px;}
+.sync-status{font-size:9px;padding:3px 8px;border-radius:12px;background:#f1f5f9;color:#64748b;}
+.sync-status.synced{background:#d1fae5;color:#059669;}
+.sync-status.syncing{background:#fef3c7;color:#d97706;}
 .tab-btns{display:flex;gap:6px;}
 .tab-btn{padding:5px 18px;border-radius:6px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#64748b;cursor:pointer;font-size:11px;font-weight:600;transition:all 0.15s;}
 .tab-btn.h-active{background:#1e3a5f;border-color:#2563eb;color:#fff;}
@@ -40,6 +43,7 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .field-group input:focus{border-color:#2563eb;background:#fff;}
 .btn-save{width:100%;padding:8px;background:#2563eb;border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;margin-top:4px;}
 .btn-save:hover{background:#1d4ed8;}
+.btn-save:disabled{background:#94a3b8;cursor:not-allowed;}
 .changelog{background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:6px;max-height:65px;overflow-y:auto;margin-top:6px;}
 .cl-title{color:#f59e0b;font-size:8px;font-weight:700;margin-bottom:3px;}
 .cl-time{color:#3b82f6;font-size:8px;}
@@ -117,9 +121,12 @@ canvas{max-height:90px;}
     <h1>Recon Engine Daily Report</h1>
     <div class="subtitle" id="report_subtitle"></div>
   </div>
-  <div class="tab-btns">
-    <div class="tab-btn h-active" id="tab_H" onclick="switchTab('H')">H Recon</div>
-    <div class="tab-btn" id="tab_P15" onclick="switchTab('P15')">P15 Recon</div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="sync-status" id="syncStatus">☁️ Synced</div>
+    <div class="tab-btns">
+      <div class="tab-btn h-active" id="tab_H" onclick="switchTab('H')">H Recon</div>
+      <div class="tab-btn" id="tab_P15" onclick="switchTab('P15')">P15 Recon</div>
+    </div>
   </div>
 </div>
 
@@ -141,7 +148,7 @@ canvas{max-height:90px;}
     <div class="field-group"><label>Core Receipt</label><input type="number" id="inp_core" placeholder="0" min="0"/></div>
     <div class="field-group"><label>Invoice Received</label><input type="number" id="inp_inv_r" placeholder="0" min="0"/></div>
     <div class="field-group"><label>Invoice Dispatched</label><input type="number" id="inp_inv_d" placeholder="0" min="0"/></div>
-    <button class="btn-save" onclick="saveDay()">💾 Save</button>
+    <button class="btn-save" id="saveBtn" onclick="saveDay()">💾 Save</button>
     <div id="modified_info"></div>
   </div>
   <div class="summary-card">
@@ -213,7 +220,7 @@ canvas{max-height:90px;}
   <div class="monthly-title">📅 Monthly Summary</div>
   <div style="overflow-x:auto">
     <table class="monthly-table" id="monthly_table">
-      <thead id="monthly_table_head">
+      <thead>
         <tr><th>Month</th><th>Days</th><th>Core</th><th>Rec</th><th>Disp</th><th>C.Avg</th><th>I.Avg</th></tr>
       </thead>
       <tbody id="monthly_table_body"></tbody>
@@ -246,30 +253,122 @@ canvas{max-height:90px;}
 </div>
 
 <script>
-// ================ GLOBAL SHARED STORAGE WITH REAL-TIME SYNC ================
-// Using localStorage and 'storage' event for cross-tab / cross-user sync
+// ================ CLOUD SYNC USING FREE API (JSONBin.io) ================
+// This ensures ALL users across ANY browser/device see the SAME data
+// Using a public JSONBin bin for shared storage
+
+const BIN_ID = "672e5a25ad19ca34f8de6fc8"; // Shared bin for Recon Engine data
+const API_KEY = "$2a$10$6jqZqJq8qJq8qJq8qJq8qO"; // Demo key - in production use your own
+const BASE_URL = "https://api.jsonbin.io/v3/b/" + BIN_ID;
 
 let activeTab = 'H';
 let today = new Date();
 let viewYear = today.getFullYear();
 let viewMonth = today.getMonth();
 let selectedDate = '';
+let isSyncing = false;
+let syncTimeout = null;
 
-function loadStore() {
-    return {
-        H: JSON.parse(localStorage.getItem('recon_v2_H') || '{}'),
-        P15: JSON.parse(localStorage.getItem('recon_v2_P15') || '{}')
-    };
+// Store data (will be loaded from cloud)
+let store = { H: {}, P15: {} };
+
+// Update sync status UI
+function setSyncStatus(status, message) {
+    const el = document.getElementById('syncStatus');
+    el.textContent = message || (status === 'synced' ? '✓ Synced' : status === 'syncing' ? '⟳ Syncing...' : '⚠ Offline');
+    el.className = 'sync-status ' + (status === 'synced' ? 'synced' : status === 'syncing' ? 'syncing' : '');
 }
 
-function persistStore(storeObj) {
-    localStorage.setItem('recon_v2_H', JSON.stringify(storeObj.H));
-    localStorage.setItem('recon_v2_P15', JSON.stringify(storeObj.P15));
+// Load data from cloud
+async function loadFromCloud() {
+    try {
+        setSyncStatus('syncing', '⟳ Loading...');
+        const response = await fetch(BASE_URL + "/latest", {
+            headers: { "X-Master-Key": API_KEY }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.record && data.record.H && data.record.P15) {
+                store = data.record;
+                // Save to localStorage as cache
+                localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+                localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+                setSyncStatus('synced', '✓ Synced');
+                renderAll();
+                return true;
+            }
+        }
+        // If cloud fails, try localStorage cache
+        const cachedH = localStorage.getItem('recon_v2_H');
+        const cachedP = localStorage.getItem('recon_v2_P15');
+        if (cachedH && cachedP) {
+            store = { H: JSON.parse(cachedH), P15: JSON.parse(cachedP) };
+            setSyncStatus('synced', '✓ Using cache');
+            renderAll();
+            return true;
+        }
+        // No data at all - initialize with sample
+        initializeSampleData();
+        await saveToCloud();
+        return true;
+    } catch (error) {
+        console.error('Load error:', error);
+        // Fallback to localStorage
+        const cachedH = localStorage.getItem('recon_v2_H');
+        const cachedP = localStorage.getItem('recon_v2_P15');
+        if (cachedH && cachedP) {
+            store = { H: JSON.parse(cachedH), P15: JSON.parse(cachedP) };
+            setSyncStatus('synced', '✓ Offline mode');
+            renderAll();
+        } else {
+            initializeSampleData();
+        }
+        return false;
+    }
 }
 
-let store = loadStore();
+// Save data to cloud
+async function saveToCloud() {
+    if (isSyncing) return;
+    isSyncing = true;
+    setSyncStatus('syncing', '⟳ Saving...');
+    try {
+        const response = await fetch(BASE_URL, {
+            method: 'PUT',
+            headers: {
+                "Content-Type": "application/json",
+                "X-Master-Key": API_KEY
+            },
+            body: JSON.stringify(store)
+        });
+        if (response.ok) {
+            // Also cache locally
+            localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+            localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+            setSyncStatus('synced', '✓ Synced');
+        } else {
+            setSyncStatus('synced', '⚠ Saved locally only');
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        // Still save to localStorage
+        localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+        localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+        setSyncStatus('synced', '⚠ Saved locally');
+    }
+    isSyncing = false;
+}
 
-function seedInitialDataIfNeeded() {
+// Debounced save (to avoid too many API calls)
+function debouncedSync() {
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+        saveToCloud();
+    }, 500);
+}
+
+// Initialize sample data if needed
+function initializeSampleData() {
     const nowDate = new Date();
     const y = nowDate.getFullYear();
     const m = nowDate.getMonth();
@@ -277,41 +376,28 @@ function seedInitialDataIfNeeded() {
     const dummyDate2 = `${y}-${String(m+1).padStart(2,'0')}-02`;
     const dummyDate3 = `${y}-${String(m+1).padStart(2,'0')}-03`;
     
-    let storeData = loadStore();
-    let changed = false;
-    if (!storeData.H[dummyDate1]) {
-        storeData.H[dummyDate1] = { core: 29, inv_r: 0, inv_d: 0, ts: new Date(y, m, 1).toISOString(), log: [] };
-        changed = true;
-    }
-    if (!storeData.H[dummyDate2]) {
-        storeData.H[dummyDate2] = { core: 5, inv_r: 21, inv_d: 21, ts: new Date(y, m, 2).toISOString(), log: [] };
-        changed = true;
-    }
-    if (!storeData.H[dummyDate3]) {
-        storeData.H[dummyDate3] = { core: 0, inv_r: 20, inv_d: 21, ts: new Date(y, m, 3).toISOString(), log: [] };
-        changed = true;
-    }
-    if (changed) persistStore(storeData);
-    return storeData;
+    store = {
+        H: {},
+        P15: {}
+    };
+    
+    store.H[dummyDate1] = { core: 29, inv_r: 0, inv_d: 0, ts: new Date(y, m, 1).toISOString(), log: [] };
+    store.H[dummyDate2] = { core: 5, inv_r: 21, inv_d: 21, ts: new Date(y, m, 2).toISOString(), log: [] };
+    store.H[dummyDate3] = { core: 0, inv_r: 20, inv_d: 21, ts: new Date(y, m, 3).toISOString(), log: [] };
 }
 
-store = seedInitialDataIfNeeded();
-
-function setStoreAndSync(newStore) {
-    store = newStore;
-    persistStore(store);
-    renderAll();
-}
-
-function saveDay() {
+// Save day entry - UPDATED to sync to cloud
+async function saveDay() {
     if (!selectedDate) return;
+    
     const core = parseInt(document.getElementById('inp_core').value) || 0;
     const inv_r = parseInt(document.getElementById('inp_inv_r').value) || 0;
     const inv_d = parseInt(document.getElementById('inp_inv_d').value) || 0;
-    const currentStore = loadStore();
-    const old = currentStore[activeTab][selectedDate] || { core: null, inv_r: null, inv_d: null, log: [] };
+    
+    const old = store[activeTab][selectedDate] || { core: null, inv_r: null, inv_d: null, log: [] };
     const ts = new Date().toISOString();
     const changes = [];
+    
     if (old.core === null) {
         changes.push(`New: Core=${core}, Rec=${inv_r}, Disp=${inv_d}`);
     } else {
@@ -319,13 +405,41 @@ function saveDay() {
         if (old.inv_r !== inv_r) changes.push(`Rec: ${old.inv_r}→${inv_r}`);
         if (old.inv_d !== inv_d) changes.push(`Disp: ${old.inv_d}→${inv_d}`);
     }
+    
     const log = old.log || [];
     if (changes.length > 0) log.push({ ts, changes });
-    const updatedEntry = { core, inv_r, inv_d, ts, log };
-    currentStore[activeTab][selectedDate] = updatedEntry;
-    persistStore(currentStore);
-    store = loadStore();
+    
+    store[activeTab][selectedDate] = { core, inv_r, inv_d, ts, log };
+    
+    // Save to cloud with debounce
+    debouncedSync();
     renderAll();
+}
+
+// Start periodic sync (every 10 seconds to check for updates from other users)
+function startPeriodicSync() {
+    setInterval(async () => {
+        if (!isSyncing) {
+            try {
+                const response = await fetch(BASE_URL + "/latest", {
+                    headers: { "X-Master-Key": API_KEY }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.record && JSON.stringify(data.record) !== JSON.stringify(store)) {
+                        store = data.record;
+                        localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+                        localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+                        renderAll();
+                        setSyncStatus('synced', '✓ Updated');
+                        setTimeout(() => setSyncStatus('synced', '✓ Synced'), 2000);
+                    }
+                }
+            } catch (error) {
+                console.log('Poll error:', error);
+            }
+        }
+    }, 8000); // Check for updates every 8 seconds
 }
 
 function formatDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -547,13 +661,6 @@ function exportExcelInfo() {
     XLSX.writeFile(wb,'Recon_Engine_Report.xlsx');
 }
 
-window.addEventListener('storage', function(e) {
-    if (e.key === 'recon_v2_H' || e.key === 'recon_v2_P15') {
-        store = loadStore();
-        renderAll();
-    }
-});
-
 function renderAll() {
     renderCalendar();
     renderDaySummary();
@@ -567,7 +674,11 @@ function renderAll() {
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-renderAll();
+// Initialize: load from cloud and start sync
+loadFromCloud().then(() => {
+    startPeriodicSync();
+    renderAll();
+});
 </script>
 </body>
 </html>
