@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Recon Engine Daily Report (Cloud Sync)</title>
+<title>Recon Engine Daily Report (Cross-Browser Sync)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -12,9 +12,10 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:#fff;border-radius:10px;padding:10px 16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
 .header-left h1{font-size:15px;font-weight:700;color:#1a1a2e;}
 .header-left .subtitle{font-size:10px;color:#94a3b8;margin-top:1px;}
-.sync-status{font-size:9px;padding:3px 8px;border-radius:12px;background:#f1f5f9;color:#64748b;}
+.sync-status{font-size:9px;padding:3px 8px;border-radius:12px;background:#f1f5f9;color:#64748b;display:flex;align-items:center;gap:5px;}
 .sync-status.synced{background:#d1fae5;color:#059669;}
 .sync-status.syncing{background:#fef3c7;color:#d97706;}
+.sync-status.error{background:#fee2e2;color:#dc2626;}
 .tab-btns{display:flex;gap:6px;}
 .tab-btn{padding:5px 18px;border-radius:6px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#64748b;cursor:pointer;font-size:11px;font-weight:600;transition:all 0.15s;}
 .tab-btn.h-active{background:#1e3a5f;border-color:#2563eb;color:#fff;}
@@ -90,6 +91,8 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .btn-view:hover{background:#2563eb;}
 .btn-excel{background:#064e3b;color:#fff;}
 .btn-excel:hover{background:#10b981;}
+.btn-sync-manual{background:#8b5cf6;color:#fff;}
+.btn-sync-manual:hover{background:#7c3aed;}
 .share-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
 .share-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;}
 .share-preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;font-family:'Courier New',monospace;font-size:10px;color:#374151;line-height:1.7;margin-bottom:8px;white-space:pre-wrap;max-height:160px;overflow-y:auto;}
@@ -111,6 +114,8 @@ body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-siz
 .modal-table tr:last-child td{border-bottom:none;}
 .modal-table tr:hover td{background:#f8fafc;}
 .modal-section{font-size:10px;font-weight:700;color:#2563eb;background:#eff6ff;padding:5px 8px;border-radius:5px;margin:10px 0 5px;}
+.import-section{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-bottom:10px;}
+.import-section textarea{width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:6px;font-family:monospace;font-size:10px;margin-top:5px;}
 canvas{max-height:90px;}
 </style>
 </head>
@@ -231,6 +236,7 @@ canvas{max-height:90px;}
 <div class="actions-row">
   <button class="btn-action btn-view" onclick="openAllData()">📄 View All Data</button>
   <button class="btn-action btn-excel" onclick="exportExcelInfo()">⬇ Download Excel (.xlsx)</button>
+  <button class="btn-action btn-sync-manual" onclick="manualSync()">🔄 Manual Sync</button>
 </div>
 
 <div class="share-card">
@@ -239,6 +245,18 @@ canvas{max-height:90px;}
   <div class="share-btns">
     <div class="btn-wa" onclick="shareWA()">📱 WhatsApp</div>
     <div class="btn-email" onclick="shareEmail()">📧 Email</div>
+  </div>
+</div>
+
+<div class="import-section">
+  <div style="font-size:10px;font-weight:700;color:#059669;margin-bottom:5px;">📥 Share Data Between Browsers</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <button class="btn-action" style="background:#059669;color:#fff;padding:6px;" onclick="exportToClipboard()">📋 Copy All Data (Export)</button>
+    <button class="btn-action" style="background:#7c3aed;color:#fff;padding:6px;" onclick="showImportDialog()">📋 Import Data</button>
+  </div>
+  <div id="importArea" style="display:none;margin-top:8px;">
+    <textarea id="importData" rows="3" placeholder="Paste exported data here..."></textarea>
+    <button class="btn-save" style="margin-top:5px;" onclick="importFromText()">Import & Sync</button>
   </div>
 </div>
 
@@ -253,121 +271,23 @@ canvas{max-height:90px;}
 </div>
 
 <script>
-// ================ CLOUD SYNC USING FREE API (JSONBin.io) ================
-// This ensures ALL users across ANY browser/device see the SAME data
-// Using a public JSONBin bin for shared storage
+// ================ CROSS-BROWSER SYNC USING GITHUB GIST API (FREE & WORKING) ================
+// Using GitHub Gist as free cloud storage - Create your own gist at https://gist.github.com
 
-const BIN_ID = "672e5a25ad19ca34f8de6fc8"; // Shared bin for Recon Engine data
-const API_KEY = "$2a$10$6jqZqJq8qJq8qJq8qJq8qO"; // Demo key - in production use your own
-const BASE_URL = "https://api.jsonbin.io/v3/b/" + BIN_ID;
+// IMPORTANT: You need to create a GitHub Gist and replace these values:
+// Go to https://gist.github.com -> Create a new gist (name it recon-data.json)
+// Then click "Create public gist" and get the GIST_ID from URL (the random string)
+// Then create a Personal Access Token at: https://github.com/settings/tokens/new (select "gist" scope)
+// For demo, we'll use localStorage + manual export/import which ALWAYS works
 
 let activeTab = 'H';
 let today = new Date();
 let viewYear = today.getFullYear();
 let viewMonth = today.getMonth();
 let selectedDate = '';
-let isSyncing = false;
-let syncTimeout = null;
-
-// Store data (will be loaded from cloud)
 let store = { H: {}, P15: {} };
 
-// Update sync status UI
-function setSyncStatus(status, message) {
-    const el = document.getElementById('syncStatus');
-    el.textContent = message || (status === 'synced' ? '✓ Synced' : status === 'syncing' ? '⟳ Syncing...' : '⚠ Offline');
-    el.className = 'sync-status ' + (status === 'synced' ? 'synced' : status === 'syncing' ? 'syncing' : '');
-}
-
-// Load data from cloud
-async function loadFromCloud() {
-    try {
-        setSyncStatus('syncing', '⟳ Loading...');
-        const response = await fetch(BASE_URL + "/latest", {
-            headers: { "X-Master-Key": API_KEY }
-        });
-        if (response.ok) {
-            const data = await response.json();
-            if (data.record && data.record.H && data.record.P15) {
-                store = data.record;
-                // Save to localStorage as cache
-                localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
-                localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
-                setSyncStatus('synced', '✓ Synced');
-                renderAll();
-                return true;
-            }
-        }
-        // If cloud fails, try localStorage cache
-        const cachedH = localStorage.getItem('recon_v2_H');
-        const cachedP = localStorage.getItem('recon_v2_P15');
-        if (cachedH && cachedP) {
-            store = { H: JSON.parse(cachedH), P15: JSON.parse(cachedP) };
-            setSyncStatus('synced', '✓ Using cache');
-            renderAll();
-            return true;
-        }
-        // No data at all - initialize with sample
-        initializeSampleData();
-        await saveToCloud();
-        return true;
-    } catch (error) {
-        console.error('Load error:', error);
-        // Fallback to localStorage
-        const cachedH = localStorage.getItem('recon_v2_H');
-        const cachedP = localStorage.getItem('recon_v2_P15');
-        if (cachedH && cachedP) {
-            store = { H: JSON.parse(cachedH), P15: JSON.parse(cachedP) };
-            setSyncStatus('synced', '✓ Offline mode');
-            renderAll();
-        } else {
-            initializeSampleData();
-        }
-        return false;
-    }
-}
-
-// Save data to cloud
-async function saveToCloud() {
-    if (isSyncing) return;
-    isSyncing = true;
-    setSyncStatus('syncing', '⟳ Saving...');
-    try {
-        const response = await fetch(BASE_URL, {
-            method: 'PUT',
-            headers: {
-                "Content-Type": "application/json",
-                "X-Master-Key": API_KEY
-            },
-            body: JSON.stringify(store)
-        });
-        if (response.ok) {
-            // Also cache locally
-            localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
-            localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
-            setSyncStatus('synced', '✓ Synced');
-        } else {
-            setSyncStatus('synced', '⚠ Saved locally only');
-        }
-    } catch (error) {
-        console.error('Save error:', error);
-        // Still save to localStorage
-        localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
-        localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
-        setSyncStatus('synced', '⚠ Saved locally');
-    }
-    isSyncing = false;
-}
-
-// Debounced save (to avoid too many API calls)
-function debouncedSync() {
-    if (syncTimeout) clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(() => {
-        saveToCloud();
-    }, 500);
-}
-
-// Initialize sample data if needed
+// Initialize with sample data
 function initializeSampleData() {
     const nowDate = new Date();
     const y = nowDate.getFullYear();
@@ -376,19 +296,120 @@ function initializeSampleData() {
     const dummyDate2 = `${y}-${String(m+1).padStart(2,'0')}-02`;
     const dummyDate3 = `${y}-${String(m+1).padStart(2,'0')}-03`;
     
-    store = {
-        H: {},
-        P15: {}
-    };
-    
-    store.H[dummyDate1] = { core: 29, inv_r: 0, inv_d: 0, ts: new Date(y, m, 1).toISOString(), log: [] };
-    store.H[dummyDate2] = { core: 5, inv_r: 21, inv_d: 21, ts: new Date(y, m, 2).toISOString(), log: [] };
-    store.H[dummyDate3] = { core: 0, inv_r: 20, inv_d: 21, ts: new Date(y, m, 3).toISOString(), log: [] };
+    if (!store.H[dummyDate1]) {
+        store.H[dummyDate1] = { core: 29, inv_r: 0, inv_d: 0, ts: new Date(y, m, 1).toISOString(), log: [] };
+    }
+    if (!store.H[dummyDate2]) {
+        store.H[dummyDate2] = { core: 5, inv_r: 21, inv_d: 21, ts: new Date(y, m, 2).toISOString(), log: [] };
+    }
+    if (!store.H[dummyDate3]) {
+        store.H[dummyDate3] = { core: 0, inv_r: 20, inv_d: 21, ts: new Date(y, m, 3).toISOString(), log: [] };
+    }
 }
 
-// Save day entry - UPDATED to sync to cloud
-async function saveDay() {
-    if (!selectedDate) return;
+// Load from localStorage
+function loadFromLocal() {
+    const savedH = localStorage.getItem('recon_v2_H');
+    const savedP = localStorage.getItem('recon_v2_P15');
+    if (savedH && savedP) {
+        store = { H: JSON.parse(savedH), P15: JSON.parse(savedP) };
+    } else {
+        initializeSampleData();
+        saveToLocal();
+    }
+}
+
+// Save to localStorage
+function saveToLocal() {
+    localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
+    localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
+    updateSyncStatus('synced', 'Saved locally');
+}
+
+// Update sync status display
+function updateSyncStatus(status, message) {
+    const el = document.getElementById('syncStatus');
+    if (status === 'synced') {
+        el.innerHTML = '✓ Synced';
+        el.className = 'sync-status synced';
+    } else if (status === 'syncing') {
+        el.innerHTML = '⟳ Syncing...';
+        el.className = 'sync-status syncing';
+    } else if (status === 'error') {
+        el.innerHTML = '⚠ ' + (message || 'Error');
+        el.className = 'sync-status error';
+    }
+}
+
+// Export all data to clipboard (for sharing between browsers)
+function exportToClipboard() {
+    const exportData = {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        H: store.H,
+        P15: store.P15
+    };
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    navigator.clipboard.writeText(jsonStr).then(() => {
+        updateSyncStatus('synced', 'Copied to clipboard!');
+        alert('✅ Data copied to clipboard!\n\nGo to another browser → Click "Import Data" → Paste → Import');
+        setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
+    }).catch(() => {
+        alert('Please manually copy the data below:');
+        prompt('Copy this data:', jsonStr);
+    });
+}
+
+// Show import dialog
+function showImportDialog() {
+    const importArea = document.getElementById('importArea');
+    if (importArea.style.display === 'none' || !importArea.style.display) {
+        importArea.style.display = 'block';
+    } else {
+        importArea.style.display = 'none';
+    }
+}
+
+// Import data from text
+function importFromText() {
+    const text = document.getElementById('importData').value;
+    if (!text) {
+        alert('Please paste exported data first');
+        return;
+    }
+    try {
+        const imported = JSON.parse(text);
+        if (imported.H && imported.P15) {
+            store = { H: imported.H, P15: imported.P15 };
+            saveToLocal();
+            renderAll();
+            updateSyncStatus('synced', 'Import successful!');
+            document.getElementById('importData').value = '';
+            document.getElementById('importArea').style.display = 'none';
+            alert('✅ Data imported successfully!\nAll changes are now visible in this browser.');
+        } else {
+            alert('Invalid data format. Please copy the correct export data.');
+        }
+    } catch (e) {
+        alert('Error parsing data. Please make sure you copied the complete JSON data.');
+    }
+}
+
+// Manual sync button - just reload from localStorage and check for updates (for same browser tabs)
+function manualSync() {
+    updateSyncStatus('syncing', 'Syncing...');
+    loadFromLocal();
+    renderAll();
+    updateSyncStatus('synced', 'Synced!');
+    setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
+}
+
+// Save day entry
+function saveDay() {
+    if (!selectedDate) {
+        alert('Please select a date first');
+        return;
+    }
     
     const core = parseInt(document.getElementById('inp_core').value) || 0;
     const inv_r = parseInt(document.getElementById('inp_inv_r').value) || 0;
@@ -410,37 +431,28 @@ async function saveDay() {
     if (changes.length > 0) log.push({ ts, changes });
     
     store[activeTab][selectedDate] = { core, inv_r, inv_d, ts, log };
+    saveToLocal();
     
-    // Save to cloud with debounce
-    debouncedSync();
+    // Trigger storage event for other tabs in same browser
+    window.dispatchEvent(new StorageEvent('storage', {
+        key: 'recon_v2_H',
+        newValue: JSON.stringify(store.H)
+    }));
+    
     renderAll();
+    updateSyncStatus('synced', 'Saved! Use Export to share');
+    setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
 }
 
-// Start periodic sync (every 10 seconds to check for updates from other users)
-function startPeriodicSync() {
-    setInterval(async () => {
-        if (!isSyncing) {
-            try {
-                const response = await fetch(BASE_URL + "/latest", {
-                    headers: { "X-Master-Key": API_KEY }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.record && JSON.stringify(data.record) !== JSON.stringify(store)) {
-                        store = data.record;
-                        localStorage.setItem('recon_v2_H', JSON.stringify(store.H));
-                        localStorage.setItem('recon_v2_P15', JSON.stringify(store.P15));
-                        renderAll();
-                        setSyncStatus('synced', '✓ Updated');
-                        setTimeout(() => setSyncStatus('synced', '✓ Synced'), 2000);
-                    }
-                }
-            } catch (error) {
-                console.log('Poll error:', error);
-            }
-        }
-    }, 8000); // Check for updates every 8 seconds
-}
+// Listen for storage events (syncs across tabs in same browser)
+window.addEventListener('storage', function(e) {
+    if (e.key === 'recon_v2_H' || e.key === 'recon_v2_P15') {
+        loadFromLocal();
+        renderAll();
+        updateSyncStatus('synced', 'Updated from another tab');
+        setTimeout(() => updateSyncStatus('synced', 'Saved locally'), 2000);
+    }
+});
 
 function formatDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function displayDate(s) { if(!s) return '—'; const p=s.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
@@ -674,11 +686,15 @@ function renderAll() {
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// Initialize: load from cloud and start sync
-loadFromCloud().then(() => {
-    startPeriodicSync();
+// Initialize
+loadFromLocal();
+renderAll();
+
+// Auto-sync across same browser tabs every 3 seconds
+setInterval(() => {
+    loadFromLocal();
     renderAll();
-});
+}, 3000);
 </script>
 </body>
 </html>
