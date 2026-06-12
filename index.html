@@ -5,255 +5,303 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Recon Engine Daily Report</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+ 
+const firebaseConfig = {
+  apiKey: "AIzaSyAVOIhe7Y8SfovcV3r8ib89-4yGqlzSB90",
+  authDomain: "recon-engine-d95da.firebaseapp.com",
+  databaseURL: "https://recon-engine-d95da-default-rtdb.firebaseio.com",
+  projectId: "recon-engine-d95da",
+  storageBucket: "recon-engine-d95da.firebasestorage.app",
+  messagingSenderId: "508502739313",
+  appId: "1:508502739313:web:7963ca1b655d898bc90ed0",
+  measurementId: "G-Q7VNESXCY6"
+};
+ 
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+ 
+// Expose to window so non-module JS can use
+window._fbSet = (path, data) => set(ref(db, path), data);
+window._fbOnValue = (path, cb) => onValue(ref(db, path), snap => cb(snap.val()));
+ 
+// Bootstrap: load all data then init UI
+window._fbOnValue('recon', (val) => {
+  const data = val || {};
+  window.store = {
+    H:   (data.H   || {}),
+    P15: (data.P15 || {})
+  };
+  if (window._appReady) {
+    window.renderAll();
+    showSyncBadge();
+  } else {
+    window._appReady = true;
+    window.initApp();
+  }
+});
+ 
+function showSyncBadge() {
+  const el = document.getElementById('sync_badge');
+  if (!el) return;
+  el.textContent = '✅ Synced';
+  el.style.color = '#10b981';
+  setTimeout(() => { el.textContent = '🔄 Live'; el.style.color = '#2563eb'; }, 1500);
+}
+ 
+window._persistFirebase = function(tab, dateKey, record) {
+  const el = document.getElementById('sync_badge');
+  if (el) { el.textContent = '⏳ Saving...'; el.style.color = '#f59e0b'; }
+  window._fbSet(`recon/${tab}/${dateKey}`, record).then(() => {
+    if (el) { el.textContent = '✅ Saved!'; el.style.color = '#10b981'; }
+    setTimeout(() => { if (el) { el.textContent = '🔄 Live'; el.style.color = '#2563eb'; }}, 1500);
+  }).catch(err => {
+    if (el) { el.textContent = '❌ Error'; el.style.color = '#ef4444'; }
+    console.error('Firebase save error:', err);
+  });
+};
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-html,body{height:100%;overflow:hidden;}
-body{background:#f0f4f8;color:#1a202c;font-family:'Segoe UI',sans-serif;font-size:11px;display:flex;flex-direction:column;}
- 
-/* HEADER */
-.header{background:#fff;border-bottom:2px solid #2563eb;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.header h1{font-size:14px;font-weight:700;color:#1e3a5f;}
-.header .sub{font-size:10px;color:#64748b;}
-.tabs{display:flex;gap:6px;}
-.tab{padding:4px 14px;border-radius:5px;border:1.5px solid #2563eb;background:#fff;color:#2563eb;cursor:pointer;font-size:11px;font-weight:700;transition:all 0.15s;}
-.tab.active{background:#2563eb;color:#fff;}
- 
-/* MAIN GRID */
-.main{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto auto;gap:6px;padding:6px;overflow:hidden;}
- 
-/* CARDS */
-.card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
-.card-title{font-size:10px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #f1f5f9;padding-bottom:3px;}
- 
-/* CALENDAR */
-.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
-.cal-title{font-size:11px;font-weight:700;color:#1e3a5f;}
-.cal-nav{display:flex;gap:3px;}
-.cal-btn{background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;border-radius:4px;padding:1px 7px;cursor:pointer;font-size:11px;font-weight:700;}
-.cal-btn:hover{background:#2563eb;color:#fff;border-color:#2563eb;}
+body{background:#f0f2f5;color:#1a1a2e;font-family:'Segoe UI',sans-serif;font-size:12px;padding:12px;}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:#fff;border-radius:10px;padding:10px 16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+.header-left h1{font-size:15px;font-weight:700;color:#1a1a2e;}
+.header-left .subtitle{font-size:10px;color:#94a3b8;margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.sync-badge{font-size:10px;font-weight:700;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 10px;}
+.tab-btns{display:flex;gap:6px;}
+.tab-btn{padding:5px 18px;border-radius:6px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#64748b;cursor:pointer;font-size:11px;font-weight:600;transition:all 0.15s;}
+.tab-btn.h-active{background:#1e3a5f;border-color:#2563eb;color:#fff;}
+.tab-btn.p-active{background:#064e3b;border-color:#10b981;color:#fff;}
+.top-row{display:grid;grid-template-columns:320px 1fr 1fr;gap:10px;margin-bottom:10px;}
+.cal-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.cal-month{font-size:13px;font-weight:700;color:#1a1a2e;}
+.cal-nav{display:flex;gap:4px;align-items:center;}
+.cal-btn{background:#f1f5f9;border:1px solid #e2e8f0;color:#64748b;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:12px;line-height:1.4;}
+.cal-btn:hover{background:#e2e8f0;color:#1a1a2e;}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
-.cal-day-name{text-align:center;font-size:8px;color:#94a3b8;padding:1px 0;font-weight:700;}
-.cal-day{text-align:center;padding:3px 0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid transparent;min-height:20px;display:flex;align-items:center;justify-content:center;transition:all 0.1s;color:#334155;}
-.cal-day.empty{cursor:default;pointer-events:none;}
+.cal-day-name{text-align:center;font-size:9px;color:#94a3b8;padding:2px 0;font-weight:600;}
+.cal-day{text-align:center;padding:3px 0;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid transparent;min-height:22px;display:flex;align-items:center;justify-content:center;transition:all 0.1s;color:#374151;}
+.cal-day.empty{cursor:default;}
 .cal-day.today{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
-.cal-day.has-data{background:#d1fae5;border-color:#10b981;color:#065f46;font-weight:700;}
-.cal-day.selected{background:#dbeafe;border-color:#2563eb;color:#1d4ed8;outline:2px solid #2563eb;}
-.cal-day:not(.empty):not(.has-data):hover{background:#f1f5f9;}
- 
-/* ENTRY FORM */
-.field-group{margin-bottom:5px;}
-.field-group label{display:block;font-size:9px;color:#64748b;margin-bottom:2px;font-weight:600;}
-.field-group input{width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:5px 8px;color:#1a202c;font-size:12px;font-weight:700;outline:none;}
+.cal-day.has-data{background:#d1fae5;border-color:#10b981;color:#059669;}
+.cal-day.selected{background:#dbeafe;border-color:#2563eb;color:#1d4ed8;}
+.cal-day:not(.empty):hover{background:#f1f5f9;border-color:#cbd5e1;}
+.entry-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.card-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+.selected-date-label{font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:8px;}
+.field-group{margin-bottom:7px;}
+.field-group label{display:block;font-size:9px;color:#94a3b8;margin-bottom:3px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;}
+.field-group input{width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:6px;padding:7px 10px;color:#1a1a2e;font-size:13px;font-weight:700;outline:none;transition:border-color 0.15s;}
 .field-group input:focus{border-color:#2563eb;background:#fff;}
-.btn-save{width:100%;padding:7px;background:#2563eb;border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;margin-top:5px;}
+.btn-save{width:100%;padding:8px;background:#2563eb;border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;margin-top:4px;}
 .btn-save:hover{background:#1d4ed8;}
- 
-/* SUMMARY */
-.s-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #f1f5f9;}
-.s-row:last-child{border-bottom:none;}
-.s-label{font-size:9px;color:#64748b;display:flex;align-items:center;gap:4px;}
-.s-dot{width:6px;height:6px;border-radius:2px;flex-shrink:0;}
-.s-val{font-size:11px;font-weight:700;font-family:monospace;}
- 
-/* LEGEND */
-.legend-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;}
-.legend-row{display:flex;align-items:center;justify-content:space-between;padding:3px 6px;border-radius:4px;background:#f8fafc;border:1px solid #f1f5f9;}
-.legend-left{display:flex;align-items:center;gap:4px;}
-.legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
-.legend-name{font-size:9px;color:#64748b;}
-.legend-val{font-size:10px;font-weight:700;font-family:monospace;}
- 
-/* CHART */
-.card canvas{width:100%!important;max-height:90px;}
- 
-/* EXCEL TABLE */
-.excel-wrap{overflow:auto;max-height:100%;}
-.excel-table{width:100%;border-collapse:collapse;font-size:10px;}
-.excel-table th{background:#1e3a5f;color:#fff;padding:4px 6px;text-align:center;font-size:9px;font-weight:700;border:1px solid #2563eb;white-space:nowrap;}
-.excel-table td{padding:3px 6px;border:1px solid #e2e8f0;text-align:center;font-family:monospace;font-weight:600;}
-.excel-table tr:nth-child(even) td{background:#f8fafc;}
-.excel-table tr:hover td{background:#dbeafe;}
-.excel-table .col-h{background:#eff6ff!important;color:#1d4ed8;font-weight:700;}
-.excel-table .col-p{background:#f0fdf4!important;color:#065f46;font-weight:700;}
- 
-/* SHARE */
-.share-preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:7px;font-family:monospace;font-size:9px;color:#334155;line-height:1.6;white-space:pre-wrap;max-height:100px;overflow-y:auto;margin-bottom:6px;}
-.share-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.btn-wa{padding:6px;background:#065f46;border:none;border-radius:5px;color:#fff;font-size:10px;font-weight:700;cursor:pointer;text-align:center;}
-.btn-wa:hover{background:#047857;}
-.btn-email{padding:6px;background:#1e3a5f;border:none;border-radius:5px;color:#fff;font-size:10px;font-weight:700;cursor:pointer;text-align:center;}
-.btn-email:hover{background:#1d4ed8;}
- 
-/* MONTHLY */
-.monthly-table{width:100%;border-collapse:collapse;font-size:10px;}
-.monthly-table th{text-align:left;padding:3px 5px;font-size:8px;color:#94a3b8;border-bottom:1px solid #e2e8f0;font-weight:700;}
-.monthly-table td{padding:3px 5px;border-bottom:1px solid #f1f5f9;font-family:monospace;font-weight:600;}
- 
-/* CHANGELOG */
-.changelog{background:#fafafa;border:1px solid #e2e8f0;border-radius:4px;padding:5px;max-height:50px;overflow-y:auto;margin-top:4px;}
+.changelog{background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:6px;max-height:65px;overflow-y:auto;margin-top:6px;}
 .cl-title{color:#f59e0b;font-size:8px;font-weight:700;margin-bottom:3px;}
 .cl-time{color:#3b82f6;font-size:8px;}
-.cl-change{font-size:9px;color:#334155;}
- 
-/* GRID LAYOUT */
-.cell-cal{grid-column:1;grid-row:1;}
-.cell-entry{grid-column:2;grid-row:1;}
-.cell-summary{grid-column:3;grid-row:1;}
-.cell-legend{grid-column:1;grid-row:2;}
-.cell-chart1{grid-column:2;grid-row:2;}
-.cell-chart2{grid-column:3;grid-row:2;}
-.cell-cum1{grid-column:1;grid-row:3;}
-.cell-cum2{grid-column:2;grid-row:3;}
-.cell-cum3{grid-column:3;grid-row:3;}
-.cell-excel{grid-column:1/3;grid-row:4;}
-.cell-share{grid-column:3;grid-row:4;}
-.mini-chart canvas{width:100%!important;max-height:55px;}
-.mini-chart-title{font-size:8px;color:#64748b;font-weight:600;margin-bottom:2px;}
-.h-col{color:#1d4ed8;font-size:9px;}
-.p-col{color:#065f46;font-size:9px;}
+.cl-change{font-size:9px;color:#374151;}
+.summary-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.summary-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.summary-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;}
+.badge{background:#2563eb;border-radius:4px;padding:2px 8px;font-size:9px;color:#fff;font-weight:700;}
+.s-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f1f5f9;}
+.s-row:last-child{border-bottom:none;}
+.s-label{font-size:9px;color:#64748b;display:flex;align-items:center;gap:5px;}
+.s-dot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
+.s-val{font-size:12px;font-weight:700;font-family:'Courier New',monospace;}
+.summary-bar{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.summary-bar-title{font-size:10px;font-weight:700;color:#64748b;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px;}
+.legend-flex{display:flex;gap:16px;flex-wrap:wrap;align-items:center;}
+.legend-item{display:flex;align-items:center;gap:5px;}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.leg-label{font-size:9px;color:#64748b;}
+.leg-val{font-size:11px;font-weight:700;font-family:'Courier New',monospace;margin-left:2px;}
+.charts-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+.chart-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.chart-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+.bottom-charts-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+.bottom-chart-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.bottom-chart-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+.dual-chart-labels{display:flex;justify-content:space-between;margin-bottom:4px;}
+.dual-label{font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;}
+.dual-label.h{background:#dbeafe;color:#1d4ed8;}
+.dual-label.p{background:#d1fae5;color:#059669;}
+.dual-chart-wrap{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.dual-chart-wrap canvas{width:100%!important;}
+.monthly-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.monthly-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;}
+.monthly-table{width:100%;border-collapse:collapse;font-size:10px;}
+.monthly-table th{text-align:left;padding:4px 8px;font-size:9px;color:#94a3b8;border-bottom:1.5px solid #e2e8f0;font-weight:600;}
+.monthly-table td{padding:4px 8px;border-bottom:1px solid #f1f5f9;font-family:'Courier New',monospace;}
+.monthly-table tr:last-child td{border-bottom:none;}
+.monthly-table tr:hover td{background:#f8fafc;}
+.actions-row{display:flex;gap:10px;margin-bottom:10px;justify-content:center;}
+.btn-action{padding:10px 28px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all 0.15s;}
+.btn-view{background:#1e3a5f;color:#fff;}
+.btn-view:hover{background:#2563eb;}
+.btn-excel{background:#064e3b;color:#fff;}
+.btn-excel:hover{background:#10b981;}
+.share-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.05);}
+.share-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;}
+.share-preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;font-family:'Courier New',monospace;font-size:10px;color:#374151;line-height:1.7;margin-bottom:8px;white-space:pre-wrap;max-height:160px;overflow-y:auto;}
+.share-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.btn-wa{padding:9px;background:#064e3b;border:1.5px solid #10b981;border-radius:7px;color:#10b981;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all 0.15s;}
+.btn-wa:hover{background:#10b981;color:#fff;}
+.btn-email{padding:9px;background:#dbeafe;border:1.5px solid #2563eb;border-radius:7px;color:#1d4ed8;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all 0.15s;}
+.btn-email:hover{background:#2563eb;color:#fff;}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:#fff;border-radius:12px;padding:20px;max-width:700px;width:95%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #e2e8f0;}
+.modal-title{font-size:14px;font-weight:700;color:#1a1a2e;}
+.modal-close{background:#f1f5f9;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:#64748b;}
+.modal-close:hover{background:#e2e8f0;}
+.modal-table{width:100%;border-collapse:collapse;font-size:11px;}
+.modal-table th{text-align:left;padding:6px 8px;font-size:9px;color:#94a3b8;border-bottom:1.5px solid #e2e8f0;font-weight:600;background:#f8fafc;}
+.modal-table td{padding:5px 8px;border-bottom:1px solid #f1f5f9;font-family:'Courier New',monospace;}
+.modal-table tr:last-child td{border-bottom:none;}
+.modal-table tr:hover td{background:#f8fafc;}
+.modal-section{font-size:10px;font-weight:700;color:#2563eb;background:#eff6ff;padding:5px 8px;border-radius:5px;margin:10px 0 5px;}
+canvas{display:block;}
+.chart-card canvas{height:110px!important;}
+.bottom-chart-card canvas{height:90px!important;}
+.dual-chart-wrap canvas{height:90px!important;}
+#loading_overlay{position:fixed;inset:0;background:rgba(255,255,255,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+.loader-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loader-text{font-size:13px;font-weight:700;color:#64748b;}
 </style>
 </head>
 <body>
  
-<!-- HEADER -->
+<!-- Loading overlay -->
+<div id="loading_overlay">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">🔄 Connecting to Firebase...</div>
+</div>
+ 
 <div class="header">
-  <div>
+  <div class="header-left">
     <h1>Recon Engine Daily Report</h1>
-    <div class="sub" id="report_subtitle"></div>
+    <div class="subtitle" id="report_subtitle"></div>
   </div>
-  <div class="tabs">
-    <div class="tab active" onclick="switchTab('H')">H Recon</div>
-    <div class="tab" onclick="switchTab('P15')">P15 Recon</div>
+  <div class="header-right">
+    <span class="sync-badge" id="sync_badge">🔄 Live</span>
+    <div class="tab-btns">
+      <div class="tab-btn h-active" id="tab_H" onclick="switchTab('H')">H Recon</div>
+      <div class="tab-btn" id="tab_P15" onclick="switchTab('P15')">P15 Recon</div>
+    </div>
   </div>
 </div>
  
-<!-- MAIN GRID -->
-<div class="main">
- 
-  <!-- CALENDAR -->
-  <div class="card cell-cal">
+<div class="top-row">
+  <div class="cal-card">
     <div class="cal-header">
-      <div class="cal-title" id="cal_title"></div>
+      <div class="cal-month" id="cal_title"></div>
       <div class="cal-nav">
-        <button class="cal-btn" onclick="changeMonth(-1)">&#8249;</button>
-        <button class="cal-btn" onclick="goToday()">&#8226;</button>
-        <button class="cal-btn" onclick="changeMonth(1)">&#8250;</button>
+        <button class="cal-btn" onclick="changeMonth(-1)">‹</button>
+        <button class="cal-btn" onclick="goToday()">•</button>
+        <button class="cal-btn" onclick="changeMonth(1)">›</button>
       </div>
     </div>
     <div class="cal-grid" id="cal_grid"></div>
   </div>
- 
-  <!-- ENTRY FORM -->
-  <div class="card cell-entry">
-    <div class="card-title" id="entry_title">Select a date</div>
+  <div class="entry-card">
+    <div class="card-title">Select a Date</div>
+    <div class="selected-date-label" id="entry_title">—</div>
     <div class="field-group"><label>Core Receipt</label><input type="number" id="inp_core" placeholder="0" min="0"/></div>
     <div class="field-group"><label>Invoice Received</label><input type="number" id="inp_inv_r" placeholder="0" min="0"/></div>
     <div class="field-group"><label>Invoice Dispatched</label><input type="number" id="inp_inv_d" placeholder="0" min="0"/></div>
-    <button class="btn-save" onclick="saveDay()">💾 Save</button>
+    <button class="btn-save" onclick="saveDay()">💾 Save to Firebase</button>
     <div id="modified_info"></div>
   </div>
- 
-  <!-- DAY SUMMARY -->
-  <div class="card cell-summary" id="day_summary_box">
-    <div class="card-title">Day Summary</div>
-    <div style="color:#94a3b8;font-size:10px;text-align:center;padding:16px 0;">Click a date to view</div>
-  </div>
- 
-  <!-- LEGEND -->
-  <div class="card cell-legend">
-    <div class="card-title">&#128202; Summary — <span id="legend_day_label">—</span></div>
-    <div class="legend-grid" id="legend_box"></div>
-  </div>
- 
-  <!-- CORE RECEIPT TREND -->
-  <div class="card cell-chart1">
-    <div class="card-title">Core Receipt Trend</div>
-    <canvas id="bar_chart"></canvas>
-  </div>
- 
-  <!-- INVOICE DISPATCHED TREND -->
-  <div class="card cell-chart2">
-    <div class="card-title">Invoice Dispatched Trend</div>
-    <canvas id="line_chart"></canvas>
-  </div>
- 
-  <!-- CUMULATIVE & AVERAGE ROW -->
-  <div class="card cell-cum1">
-    <div class="card-title">&#128200; Inv &amp; Dispatch Cumulative</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-      <div><div class="mini-chart-title h-col">H Recon</div><canvas id="h_cum_chart"></canvas></div>
-      <div><div class="mini-chart-title p-col">P15 Recon</div><canvas id="p_cum_chart"></canvas></div>
+  <div class="summary-card">
+    <div class="summary-title-row">
+      <div class="summary-title">Day Summary</div>
+      <span class="badge" id="summary_date_badge">—</span>
     </div>
+    <div id="day_summary_box"><div style="color:#94a3b8;font-size:10px;text-align:center;padding:20px;">Click a date to view</div></div>
   </div>
-  <div class="card cell-cum2">
-    <div class="card-title">&#128200; Inv &amp; Dispatch Average</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-      <div><div class="mini-chart-title h-col">H Recon</div><canvas id="h_avg_chart"></canvas></div>
-      <div><div class="mini-chart-title p-col">P15 Recon</div><canvas id="p_avg_chart"></canvas></div>
-    </div>
-  </div>
-  <div class="card cell-cum3">
-    <div class="card-title">&#128200; Core Average Receipt</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-      <div><div class="mini-chart-title h-col">H Recon</div><canvas id="h_coreavg_chart"></canvas></div>
-      <div><div class="mini-chart-title p-col">P15 Recon</div><canvas id="p_coreavg_chart"></canvas></div>
-    </div>
-  </div>
-  <div class="card cell-excel" style="display:flex;align-items:center;justify-content:center;gap:12px;">
-    <button onclick="openExcel()" style="background:#1e3a5f;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:13px;font-weight:700;cursor:pointer;gap:8px;box-shadow:0 2px 8px rgba(30,58,95,0.15);">
-      &#128196; View All Data
-    </button>
-    <button onclick="downloadExcel()" style="background:#065f46;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:13px;font-weight:700;cursor:pointer;gap:8px;box-shadow:0 2px 8px rgba(6,95,70,0.15);">
-      &#11015; Download Excel (.xlsx)
-    </button>
-  </div>
+</div>
  
-  <!-- EXCEL MODAL -->
-  <div id="excel_modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:12px;width:95%;max-width:1100px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:2px solid #2563eb;">
-        <span style="font-size:14px;font-weight:700;color:#1e3a5f;">&#128196; All Data — Excel View</span>
-        <button onclick="closeExcel()" style="background:#f1f5f9;border:none;border-radius:6px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer;color:#475569;">&#10005; Close</button>
-      </div>
-      <div style="overflow:auto;padding:12px;" id="excel_view"></div>
-    </div>
-  </div>
+<div class="summary-bar">
+  <div class="summary-bar-title">📊 Summary — <span id="legend_day_label">—</span></div>
+  <div class="legend-flex" id="legend_box"></div>
+</div>
  
-  <!-- SHARE -->
-  <div class="card cell-share">
-    <div class="card-title">&#128228; Share Day Report</div>
-    <div class="share-preview" id="share_preview"></div>
-    <div class="share-btns">
-      <div class="btn-wa" onclick="shareWA()">&#128241; WhatsApp</div>
-      <div class="btn-email" onclick="shareEmail()">&#128231; Email</div>
-    </div>
-  </div>
+<div class="charts-row">
+  <div class="chart-card"><div class="chart-title">Core Receipt Trend</div><canvas id="bar_chart"></canvas></div>
+  <div class="chart-card"><div class="chart-title">Invoice Dispatched Trend</div><canvas id="line_chart"></canvas></div>
+  <div class="chart-card"><div class="chart-title">Invoice Received Trend</div><canvas id="invr_chart"></canvas></div>
+</div>
  
+<div class="bottom-charts-row">
+  <div class="bottom-chart-card">
+    <div class="bottom-chart-title">📈 Inv &amp; Dispatch Cumulative</div>
+    <div class="dual-chart-labels"><span class="dual-label h">H Recon</span><span class="dual-label p">P15 Recon</span></div>
+    <div class="dual-chart-wrap"><canvas id="h_cum_chart"></canvas><canvas id="p_cum_chart"></canvas></div>
+  </div>
+  <div class="bottom-chart-card">
+    <div class="bottom-chart-title">📊 Inv &amp; Dispatch Average</div>
+    <div class="dual-chart-labels"><span class="dual-label h">H Recon</span><span class="dual-label p">P15 Recon</span></div>
+    <div class="dual-chart-wrap"><canvas id="h_avg_chart"></canvas><canvas id="p_avg_chart"></canvas></div>
+  </div>
+  <div class="bottom-chart-card">
+    <div class="bottom-chart-title">💜 Core Average Receipt</div>
+    <div class="dual-chart-labels"><span class="dual-label h">H Recon</span><span class="dual-label p">P15 Recon</span></div>
+    <div class="dual-chart-wrap"><canvas id="h_coreavg_chart"></canvas><canvas id="p_coreavg_chart"></canvas></div>
+  </div>
+</div>
+ 
+<div class="monthly-card">
+  <div class="monthly-title">📅 Monthly Summary</div>
+  <div style="overflow-x:auto"><table class="monthly-table" id="monthly_table"></table></div>
+</div>
+ 
+<div class="actions-row">
+  <button class="btn-action btn-view" onclick="openAllData()">📄 View All Data</button>
+  <button class="btn-action btn-excel" onclick="exportExcelInfo()">⬇ Download Excel (.xlsx)</button>
+ 
+</div>
+ 
+<div class="share-card">
+  <div class="share-title">📤 Share Day Report</div>
+  <div class="share-preview" id="share_preview"></div>
+  <div class="share-btns">
+    <div class="btn-wa" onclick="shareWA()">📱 WhatsApp</div>
+    <div class="btn-email" onclick="shareEmail()">📧 Email</div>
+  </div>
+</div>
+ 
+<div class="modal-overlay" id="modal_overlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📄 All Data</div>
+      <button class="modal-close" onclick="closeModal()">✕ Close</button>
+    </div>
+    <div id="modal_body"></div>
+  </div>
 </div>
  
 <script>
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-let activeTab='H',today=new Date(),viewYear=today.getFullYear(),viewMonth=today.getMonth(),selectedDate='';
+let activeTab='H', today=new Date(), viewYear=today.getFullYear(), viewMonth=today.getMonth(), selectedDate='';
  
-const store={
-  H:JSON.parse(localStorage.getItem('recon_final_H')||'{}'),
-  P15:JSON.parse(localStorage.getItem('recon_final_P15')||'{}')
-};
-const now=new Date();
-function pd(d){return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
-if(!store.H[pd(1)])store.H[pd(1)]={core:29,inv_r:0,inv_d:0,ts:new Date(now.getFullYear(),now.getMonth(),1).toISOString()};
-if(!store.H[pd(2)])store.H[pd(2)]={core:5,inv_r:21,inv_d:21,ts:new Date(now.getFullYear(),now.getMonth(),2).toISOString()};
-if(!store.H[pd(3)])store.H[pd(3)]={core:0,inv_r:20,inv_d:21,ts:new Date(now.getFullYear(),now.getMonth(),3).toISOString()};
-persist();
+// store is set by the Firebase module above before initApp() is called
+window.store = window.store || { H: {}, P15: {} };
  
 function formatDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function displayDate(s){if(!s)return '—';const p=s.split('-');return `${p[2]}/${p[1]}/${p[0]}`;}
-function persist(){localStorage.setItem('recon_final_H',JSON.stringify(store.H));localStorage.setItem('recon_final_P15',JSON.stringify(store.P15));}
  
 function switchTab(t){
-  activeTab=t;selectedDate='';
-  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',(i===0&&t==='H')||(i===1&&t==='P15')));
+  activeTab=t; selectedDate='';
+  document.getElementById('tab_H').className='tab-btn'+(t==='H'?' h-active':'');
+  document.getElementById('tab_P15').className='tab-btn'+(t==='P15'?' p-active':'');
   renderAll();
 }
 function changeMonth(d){viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}renderAll();}
@@ -264,43 +312,40 @@ function saveDay(){
   const core=parseInt(document.getElementById('inp_core').value)||0;
   const inv_r=parseInt(document.getElementById('inp_inv_r').value)||0;
   const inv_d=parseInt(document.getElementById('inp_inv_d').value)||0;
-  const old=store[activeTab][selectedDate]||{core:null,inv_r:null,inv_d:null};
+  const old=window.store[activeTab][selectedDate]||{core:null,inv_r:null,inv_d:null};
   const ts=new Date().toISOString();
   const changes=[];
   if(old.core===null)changes.push(`New: Core=${core}, Rec=${inv_r}, Disp=${inv_d}`);
-  else{
-    if(old.core!==core)changes.push(`Core: ${old.core}→${core}`);
-    if(old.inv_r!==inv_r)changes.push(`Rec: ${old.inv_r}→${inv_r}`);
-    if(old.inv_d!==inv_d)changes.push(`Disp: ${old.inv_d}→${inv_d}`);
-  }
-  const log=old.log||[];
+  else{if(old.core!==core)changes.push(`Core: ${old.core}→${core}`);if(old.inv_r!==inv_r)changes.push(`Rec: ${old.inv_r}→${inv_r}`);if(old.inv_d!==inv_d)changes.push(`Disp: ${old.inv_d}→${inv_d}`);}
+  const log=(old.log||[]).slice();
   if(changes.length>0)log.push({ts,changes});
-  store[activeTab][selectedDate]={core,inv_r,inv_d,ts,log};
-  persist();
+  const record={core,inv_r,inv_d,ts,log};
+  window.store[activeTab][selectedDate]=record;
+  // Save to Firebase
+  window._persistFirebase(activeTab, selectedDate, record);
   selectedDate='';
   renderAll();
 }
  
 function calcUpTo(tab,date){
   if(!date)return{cumCore:0,cumR:0,cumD:0,avgR:0,avgD:0,avgCore:0};
-  const s=store[tab];const keys=Object.keys(s).filter(k=>k<=date).sort();
-  let cc=0,cr=0,cd=0;
-  keys.forEach(k=>{cc+=s[k].core;cr+=s[k].inv_r;cd+=s[k].inv_d;});
+  const s=window.store[tab];const keys=Object.keys(s).filter(k=>k<=date).sort();
+  let cc=0,cr=0,cd=0;keys.forEach(k=>{cc+=s[k].core;cr+=s[k].inv_r;cd+=s[k].inv_d;});
   const n=keys.length||1;
   return{cumCore:cc,cumR:cr,cumD:cd,avgR:+(cr/n).toFixed(1),avgD:+(cd/n).toFixed(1),avgCore:+(cc/n).toFixed(1)};
 }
  
 function buildSeries(tab){
-  const s=store[tab];const keys=Object.keys(s).sort();
-  const labels=[],core=[],invDisp=[],invCum=[],invAvg=[],coreAvg=[];
+  const s=window.store[tab];const keys=Object.keys(s).sort();
+  const labels=[],core=[],invR=[],invDisp=[],invCum=[],invAvg=[],coreAvg=[];
   let cc=0,cr=0,cd=0;
   keys.forEach((k,i)=>{
     const p=k.split('-');labels.push(`${p[2]}/${p[1]}`);
     cc+=s[k].core;cr+=s[k].inv_r;cd+=s[k].inv_d;const n=i+1;
-    core.push(s[k].core);invDisp.push(s[k].inv_d);
+    core.push(s[k].core);invR.push(s[k].inv_r);invDisp.push(s[k].inv_d);
     invCum.push(cr+cd);invAvg.push(+((cr+cd)/(2*n)).toFixed(1));coreAvg.push(+(cc/n).toFixed(1));
   });
-  return{labels,core,invDisp,invCum,invAvg,coreAvg};
+  return{labels,core,invR,invDisp,invCum,invAvg,coreAvg};
 }
  
 const FIELDS=[
@@ -313,55 +358,48 @@ const FIELDS=[
 ];
  
 function renderCalendar(){
-  const s=store[activeTab];
+  const s=window.store[activeTab];
   document.getElementById('cal_title').textContent=`${MONTHS[viewMonth]} ${viewYear}`;
   document.getElementById('report_subtitle').textContent=`${MONTHS[viewMonth]} ${viewYear} — Recon Engine`;
   const grid=document.getElementById('cal_grid');grid.innerHTML='';
-  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>{
-    const el=document.createElement('div');el.className='cal-day-name';el.textContent=d;grid.appendChild(el);
-  });
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>{const el=document.createElement('div');el.className='cal-day-name';el.textContent=d;grid.appendChild(el);});
   const first=new Date(viewYear,viewMonth,1).getDay();
   const days=new Date(viewYear,viewMonth+1,0).getDate();
   for(let i=0;i<first;i++){const el=document.createElement('div');el.className='cal-day empty';grid.appendChild(el);}
   for(let d=1;d<=days;d++){
     const ds=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const el=document.createElement('div');el.className='cal-day';el.textContent=d;
-    if(s[ds]){el.classList.add('has-data');}
-    else if(ds===selectedDate){el.classList.add('selected');}
-    else if(ds===formatDate(today)){el.classList.add('today');}
+    if(s[ds])el.classList.add('has-data');
+    if(ds===formatDate(today)&&ds!==selectedDate)el.classList.add('today');
+    if(ds===selectedDate)el.classList.add('selected');
     el.onclick=()=>{selectedDate=(selectedDate===ds)?'':ds;renderAll();};
     grid.appendChild(el);
   }
 }
  
 function renderDaySummary(){
+  const dateKey=selectedDate||formatDate(today);
+  document.getElementById('summary_date_badge').textContent=displayDate(dateKey);
   const box=document.getElementById('day_summary_box');
-  if(!selectedDate){
-    box.innerHTML='<div class="card-title">Day Summary</div><div style="color:#94a3b8;font-size:10px;text-align:center;padding:16px 0;">Click a date to view</div>';
-    return;
-  }
-  const ex=store[activeTab][selectedDate];
-  if(!ex){
-    box.innerHTML=`<div class="card-title">Day Summary</div><div style="color:#94a3b8;font-size:10px;text-align:center;padding:10px;">&#128197; ${displayDate(selectedDate)}<br>No data yet</div>`;
-    return;
-  }
-  const c=calcUpTo(activeTab,selectedDate);
+  const ex=window.store[activeTab][dateKey];
+  if(!ex){box.innerHTML=`<div style="color:#94a3b8;font-size:10px;text-align:center;padding:20px;">📅 ${displayDate(dateKey)}<br>No data yet</div>`;return;}
+  const c=calcUpTo(activeTab,dateKey);
   const rows=[
     {label:'Core Receipt',val:ex.core,color:'#2563eb'},
-    {label:'Inv Rec/Disp',val:`${ex.inv_r}/${ex.inv_d}`,color:'#10b981'},
+    {label:'Inv Rec / Disp',val:`${ex.inv_r} / ${ex.inv_d}`,color:'#10b981'},
     {label:'Core Cumulative',val:c.cumCore,color:'#ef4444'},
-    {label:'Inv Cumulative',val:`${c.cumR}/${c.cumD}`,color:'#f97316'},
-    {label:'Inv & Disp Avg',val:`${c.avgR}/${c.avgD}`,color:'#eab308'},
+    {label:'Inv Cumulative',val:`${c.cumR} / ${c.cumD}`,color:'#f97316'},
+    {label:'Inv & Disp Avg',val:`${c.avgR} / ${c.avgD}`,color:'#eab308'},
     {label:'Core Avg',val:c.avgCore,color:'#a855f7'},
   ];
-  let html=`<div class="card-title">&#128197; ${displayDate(selectedDate)}</div>`;
+  let html='';
   rows.forEach(r=>{html+=`<div class="s-row"><div class="s-label"><div class="s-dot" style="background:${r.color}"></div>${r.label}</div><div class="s-val" style="color:${r.color}">${r.val}</div></div>`;});
   box.innerHTML=html;
 }
  
 function renderEntryForm(){
-  const ex=selectedDate?store[activeTab][selectedDate]:null;
-  document.getElementById('entry_title').textContent=selectedDate?`📅 ${displayDate(selectedDate)}`:'Select a date';
+  const ex=selectedDate?window.store[activeTab][selectedDate]:null;
+  document.getElementById('entry_title').textContent=selectedDate?`📅 ${displayDate(selectedDate)}`:'—';
   document.getElementById('inp_core').value=ex?ex.core:'';
   document.getElementById('inp_inv_r').value=ex?ex.inv_r:'';
   document.getElementById('inp_inv_d').value=ex?ex.inv_d:'';
@@ -369,38 +407,54 @@ function renderEntryForm(){
     let html=`<div class="changelog"><div class="cl-title">📋 CHANGE LOG</div>`;
     [...ex.log].reverse().forEach(l=>{
       const ld=new Date(l.ts);
-      html+=`<div style="margin-bottom:3px"><div class="cl-time">🕐 ${ld.toLocaleDateString('en-GB')} ${ld.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>`;
-      l.changes.forEach(ch=>{html+=`<div class="cl-change">• ${ch}</div>`;});
+      html+=`<div style="margin-bottom:4px"><div class="cl-time">🕐 ${ld.toLocaleDateString('en-GB')} ${ld.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>`;
+      l.changes.forEach(ch=>{html+=`<div class="cl-change" style="color:${ch.startsWith('New')?'#10b981':'#374151'}">• ${ch}</div>`;});
       html+=`</div>`;
     });
     html+=`</div>`;
     document.getElementById('modified_info').innerHTML=html;
-  } else document.getElementById('modified_info').innerHTML='';
+  }else document.getElementById('modified_info').innerHTML='';
 }
  
 function renderLegend(){
   const date=selectedDate||formatDate(today);
-  const ex=store[activeTab][date];
+  const ex=window.store[activeTab][date];
   const d=ex||{core:0,inv_r:0,inv_d:0};
   const c=calcUpTo(activeTab,date);
   const values={core:d.core,invDisp:d.inv_d,coreCum:c.cumCore,invCum:c.cumR,invAvg:c.avgR,coreAvg:c.avgCore};
   document.getElementById('legend_day_label').textContent=displayDate(date);
   document.getElementById('legend_box').innerHTML=FIELDS.map(f=>`
-    <div class="legend-row">
-      <div class="legend-left"><div class="legend-dot" style="background:${f.color}"></div><span class="legend-name">${f.label}</span></div>
-      <span class="legend-val" style="color:${f.color}">${values[f.key]}</span>
+    <div class="legend-item">
+      <div class="leg-dot" style="background:${f.color}"></div>
+      <span class="leg-label">${f.label}</span>
+      <span class="leg-val" style="color:${f.color}">${values[f.key]}</span>
     </div>`).join('');
 }
  
 const charts={};
-function makeChart(id,labels,data,color){
+const CHART_OPTS={
+  responsive:true,
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{ticks:{color:'#94a3b8',font:{size:7}},grid:{color:'#f1f5f9'}},
+    y:{ticks:{color:'#94a3b8',font:{size:7}},grid:{color:'#f1f5f9'},beginAtZero:true}
+  }
+};
+ 
+function makeChart(id,labels,data,color,type='line'){
   if(charts[id])charts[id].destroy();
-  const gc='rgba(0,0,0,0.04)',tc='#94a3b8';
-  const sc={x:{ticks:{color:tc,font:{size:7}},grid:{color:gc}},y:{ticks:{color:tc,font:{size:7}},grid:{color:gc},beginAtZero:true}};
   charts[id]=new Chart(document.getElementById(id),{
-    type:'line',
-    data:{labels,datasets:[{data,borderColor:color,backgroundColor:color+'22',pointRadius:2,pointBackgroundColor:color,tension:0.4,fill:true,borderWidth:1.5}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:sc}
+    type:type,
+    data:{labels,datasets:[{data,borderColor:color,backgroundColor:color+'33',pointRadius:2,pointBackgroundColor:color,tension:0.4,fill:true,borderWidth:1.5,borderRadius:type==='bar'?3:0}]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#94a3b8',font:{size:7}},grid:{color:'#f1f5f9'}},
+        y:{ticks:{color:'#94a3b8',font:{size:7}},grid:{color:'#f1f5f9'},beginAtZero:true}
+      }
+    }
   });
 }
  
@@ -408,159 +462,99 @@ function renderTrends(){
   const s=buildSeries(activeTab);
   const sH=buildSeries('H');
   const sP=buildSeries('P15');
-  makeChart('bar_chart',s.labels,s.core,'#2563eb');
+  makeChart('bar_chart',s.labels,s.core,'#2563eb','line');
   makeChart('line_chart',s.labels,s.invDisp,'#10b981');
+  makeChart('invr_chart',s.labels,s.invR,'#f97316');
   makeChart('h_cum_chart',sH.labels,sH.invCum,'#f97316');
-  makeChart('p_cum_chart',sP.labels,sP.invCum,'#f97316');
   makeChart('h_avg_chart',sH.labels,sH.invAvg,'#eab308');
-  makeChart('p_avg_chart',sP.labels,sP.invAvg,'#eab308');
   makeChart('h_coreavg_chart',sH.labels,sH.coreAvg,'#a855f7');
+  makeChart('p_cum_chart',sP.labels,sP.invCum,'#10b981');
+  makeChart('p_avg_chart',sP.labels,sP.invAvg,'#eab308');
   makeChart('p_coreavg_chart',sP.labels,sP.coreAvg,'#a855f7');
 }
  
-function renderExcel(){
-  // All dates from both H and P15
-  const allDates=[...new Set([...Object.keys(store.H),...Object.keys(store.P15)])].sort();
-  if(!allDates.length){document.getElementById('excel_view').innerHTML='<div style="color:#94a3b8;padding:8px;text-align:center;">No data yet</div>';return;}
- 
-  let cumH={cc:0,cr:0,cd:0},cumP={cc:0,cr:0,cd:0};
-  let html=`<table class="excel-table"><thead><tr>
-    <th>Date</th>
-    <th colspan="2" style="background:#1e3a5f;">H Recon</th>
-    <th colspan="4" style="background:#1e3a5f;">H Cumulative</th>
-    <th colspan="2" style="background:#065f46;">P15 Recon</th>
-    <th colspan="4" style="background:#065f46;">P15 Cumulative</th>
-  </tr><tr>
-    <th>Day</th>
-    <th class="col-h">Core</th><th class="col-h">Rec/Disp</th>
-    <th class="col-h">Core Cum</th><th class="col-h">Inv Cum</th><th class="col-h">Inv Avg</th><th class="col-h">Core Avg</th>
-    <th class="col-p">Core</th><th class="col-p">Rec/Disp</th>
-    <th class="col-p">Core Cum</th><th class="col-p">Inv Cum</th><th class="col-p">Inv Avg</th><th class="col-p">Core Avg</th>
-  </tr></thead><tbody>`;
- 
-  allDates.forEach((ds,i)=>{
-    const h=store.H[ds]||{core:0,inv_r:0,inv_d:0};
-    const p=store.P15[ds]||{core:0,inv_r:0,inv_d:0};
-    cumH.cc+=h.core;cumH.cr+=h.inv_r;cumH.cd+=h.inv_d;
-    cumP.cc+=p.core;cumP.cr+=p.inv_r;cumP.cd+=p.inv_d;
-    const n=i+1;
-    const hAvg=+((cumH.cr+cumH.cd)/(2*n)).toFixed(1);
-    const hCAvg=+(cumH.cc/n).toFixed(1);
-    const pAvg=+((cumP.cr+cumP.cd)/(2*n)).toFixed(1);
-    const pCAvg=+(cumP.cc/n).toFixed(1);
-    const dp=ds.split('-');const dStr=`${dp[2]}/${dp[1]}`;
-    const isSelected=ds===selectedDate;
-    const rowStyle=isSelected?'style="background:#dbeafe;"':'';
-    html+=`<tr ${rowStyle}>
-      <td style="font-weight:700;color:#1e3a5f;">${dStr}</td>
-      <td class="col-h">${h.core}</td><td class="col-h">${h.inv_r}/${h.inv_d}</td>
-      <td style="color:#ef4444;">${cumH.cc}</td><td style="color:#f97316;">${cumH.cr+cumH.cd}</td><td style="color:#eab308;">${hAvg}</td><td style="color:#a855f7;">${hCAvg}</td>
-      <td class="col-p">${p.core}</td><td class="col-p">${p.inv_r}/${p.inv_d}</td>
-      <td style="color:#ef4444;">${cumP.cc}</td><td style="color:#f97316;">${cumP.cr+cumP.cd}</td><td style="color:#eab308;">${pAvg}</td><td style="color:#a855f7;">${pCAvg}</td>
-    </tr>`;
-  });
-  html+=`</tbody></table>`;
-  document.getElementById('excel_view').innerHTML=html;
+function renderMonthly(){
+  const s=window.store[activeTab];const monthly={};
+  Object.keys(s).sort().forEach(k=>{const ym=k.substring(0,7);if(!monthly[ym])monthly[ym]={core:0,inv_r:0,inv_d:0,days:0};monthly[ym].core+=s[k].core;monthly[ym].inv_r+=s[k].inv_r;monthly[ym].inv_d+=s[k].inv_d;monthly[ym].days++;});
+  const keys=Object.keys(monthly).sort();
+  if(!keys.length){document.getElementById('monthly_table').innerHTML='<tr><td style="color:#94a3b8;padding:8px">No data yet</td></tr>';return;}
+  let html=`<thead><tr><th>Month</th><th>Days</th><th>Core</th><th>Rec</th><th>Disp</th><th>C.Avg</th><th>I.Avg</th></tr></thead><tbody>`;
+  keys.forEach(ym=>{const m=monthly[ym];const[y,mo]=ym.split('-');html+=`<tr><td style="color:#1a1a2e;font-weight:700">${MONTHS_SHORT[parseInt(mo)-1]} ${y}</td><td style="color:#2563eb">${m.days}</td><td style="color:#10b981">${m.core}</td><td style="color:#f97316">${m.inv_r}</td><td style="color:#eab308">${m.inv_d}</td><td style="color:#a855f7">${(m.core/m.days).toFixed(1)}</td><td style="color:#ef4444">${((m.inv_r+m.inv_d)/2/m.days).toFixed(1)}</td></tr>`;});
+  document.getElementById('monthly_table').innerHTML=html+'</tbody>';
 }
  
 function buildMessage(){
   const date=selectedDate||formatDate(today);
   const dStr=displayDate(date);
-  const sH=store['H'][date]||{core:0,inv_r:0,inv_d:0};
+  const sH=window.store['H'][date]||{core:0,inv_r:0,inv_d:0};
   const cH=calcUpTo('H',date);
-  const sP=store['P15'][date]||{core:0,inv_r:0,inv_d:0};
+  const sP=window.store['P15'][date]||{core:0,inv_r:0,inv_d:0};
   const cP=calcUpTo('P15',date);
   return `${dStr} Recon Core Receipt, Invoice Received & Dispatched :\n_ _ _ _ _ _ _ _ _ _ _ _\nH - Recon Engine\nCore Receipt : ${String(sH.core).padStart(2,'0')}\nInvoice Received & Dispatched : ${sH.inv_r}/${sH.inv_d}\nCore Receipt Cumulative : ${String(cH.cumCore).padStart(2,'0')}\nInvoice & Dispatch Cumulative : ${cH.cumR}\nInvoice & Dispatch Average : ${cH.avgR}\nCore Average Receipt : ${cH.avgCore}\n_ _ _ _ _ _ _ _ _ _ _ _\nP15 - Recon Engine\nCore Receipt : ${String(sP.core).padStart(2,'0')}\nInvoice Received & Dispatched : ${sP.inv_r}/${sP.inv_d}\nCore Receipt Cumulative : ${String(cP.cumCore).padStart(2,'0')}\nInvoice & Dispatch Cumulative : ${cP.cumR}\nInvoice & Dispatch Average : ${cP.avgR}\nCore Average Receipt : ${cP.avgCore}\n_ _ _ _ _ _ _ _ _ _ _ _\nWarm Regards!!`;
 }
+ 
 function renderShare(){document.getElementById('share_preview').textContent=buildMessage();}
 function shareWA(){window.open(`https://wa.me/?text=${encodeURIComponent(buildMessage())}`,'_blank');}
-function shareEmail(){
-  const date=selectedDate||formatDate(today);
-  window.open(`mailto:?subject=${encodeURIComponent('Recon Engine Report — '+displayDate(date))}&body=${encodeURIComponent(buildMessage())}`,'_blank');
-}
+function shareEmail(){window.open(`mailto:?subject=${encodeURIComponent(`Recon Engine Report — ${displayDate(selectedDate||formatDate(today))}`)}&body=${encodeURIComponent(buildMessage())}`,'_blank');}
  
-function downloadExcel(){
-  const allDates=[...new Set([...Object.keys(store.H),...Object.keys(store.P15)])].sort();
-  // Build Excel-compatible XML (no CDN needed - works offline)
-  let xml=`<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Styles>
-<Style ss:ID="h"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/></Style>
-<Style ss:ID="hp"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#065F46" ss:Pattern="Solid"/></Style>
-<Style ss:ID="g"><Interior ss:Color="#D1FAE5" ss:Pattern="Solid"/></Style>
-<Style ss:ID="b"><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/></Style>
-</Styles>
-<Worksheet ss:Name="H Recon"><Table>
-<Row>
-<Cell ss:StyleID="h"><Data ss:Type="String">Date</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Core Receipt</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Inv Received</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Inv Dispatched</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Core Cumulative</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Inv Cumulative</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Inv Avg</Data></Cell>
-<Cell ss:StyleID="h"><Data ss:Type="String">H Core Avg</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Core Receipt</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Inv Received</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Inv Dispatched</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Core Cumulative</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Inv Cumulative</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Inv Avg</Data></Cell>
-<Cell ss:StyleID="hp"><Data ss:Type="String">P15 Core Avg</Data></Cell>
-</Row>`;
- 
-  let cumH={cc:0,cr:0,cd:0},cumP={cc:0,cr:0,cd:0};
-  allDates.forEach((ds,i)=>{
-    const h=store.H[ds]||{core:0,inv_r:0,inv_d:0};
-    const p=store.P15[ds]||{core:0,inv_r:0,inv_d:0};
-    cumH.cc+=h.core;cumH.cr+=h.inv_r;cumH.cd+=h.inv_d;
-    cumP.cc+=p.core;cumP.cr+=p.inv_r;cumP.cd+=p.inv_d;
-    const n=i+1;const dp=ds.split('-');
-    const dStr=`${dp[2]}/${dp[1]}/${dp[0]}`;
-    const style=i%2===0?'g':'b';
-    const hAvg=+((cumH.cr+cumH.cd)/(2*n)).toFixed(1);
-    const hCAvg=+(cumH.cc/n).toFixed(1);
-    const pAvg=+((cumP.cr+cumP.cd)/(2*n)).toFixed(1);
-    const pCAvg=+(cumP.cc/n).toFixed(1);
-    xml+=`<Row>
-<Cell ss:StyleID="${style}"><Data ss:Type="String">${dStr}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${h.core}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${h.inv_r}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${h.inv_d}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${cumH.cc}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${cumH.cr+cumH.cd}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${hAvg}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${hCAvg}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${p.core}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${p.inv_r}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${p.inv_d}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${cumP.cc}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${cumP.cr+cumP.cd}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${pAvg}</Data></Cell>
-<Cell ss:StyleID="${style}"><Data ss:Type="Number">${pCAvg}</Data></Cell>
-</Row>`;
+function openAllData(){
+  let html='';
+  ['H','P15'].forEach(tab=>{
+    const s=window.store[tab];const keys=Object.keys(s).sort();
+    html+=`<div class="modal-section">${tab} Recon — ${keys.length} records</div>`;
+    if(!keys.length){html+='<p style="color:#94a3b8;font-size:11px;padding:4px 0">No data</p>';return;}
+    html+=`<table class="modal-table"><thead><tr><th>Date</th><th>Core Receipt</th><th>Inv Received</th><th>Inv Dispatched</th><th>Saved At</th></tr></thead><tbody>`;
+    keys.forEach(k=>{const r=s[k];const d=new Date(r.ts);html+=`<tr><td style="font-weight:700;color:#1a1a2e">${displayDate(k)}</td><td style="color:#2563eb">${r.core}</td><td style="color:#f97316">${r.inv_r}</td><td style="color:#10b981">${r.inv_d}</td><td style="color:#94a3b8;font-size:9px">${d.toLocaleDateString('en-GB')} ${d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</td></tr>`;});
+    html+=`</tbody></table>`;
   });
-  xml+=`</Table></Worksheet></Workbook>`;
-  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='Recon_Engine_Report.xls';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  document.getElementById('modal_body').innerHTML=html;
+  document.getElementById('modal_overlay').classList.add('show');
 }
-function openExcel(){renderExcel();document.getElementById('excel_modal').style.display='flex';}
-function closeExcel(){document.getElementById('excel_modal').style.display='none';}
-function renderAll(){
+function closeModal(){document.getElementById('modal_overlay').classList.remove('show');}
+function closeModalOutside(e){if(e.target===document.getElementById('modal_overlay'))closeModal();}
+ 
+function exportExcelInfo(){
+  function buildSheetData(tab){
+    const s=window.store[tab];
+    const keys=Object.keys(s).sort();
+    const rows=[['Date','Core Receipt','Inv Received','Inv Dispatched','Core Cumulative','Inv Cumulative','Inv & Disp Avg','Core Avg Receipt']];
+    let cc=0,cr=0,cd=0;
+    keys.forEach((k,i)=>{
+      const r=s[k];
+      cc+=r.core; cr+=r.inv_r; cd+=r.inv_d;
+      const n=i+1;
+      const p=k.split('-');
+      const dateStr=`${p[2]}/${p[1]}/${p[0]}`;
+      const invAvg=+((cr+cd)/(2*n)).toFixed(1);
+      const coreAvg=+(cc/n).toFixed(1);
+      rows.push([dateStr, r.core, r.inv_r, r.inv_d, cc, cr+cd, invAvg, coreAvg]);
+    });
+    return rows;
+  }
+  const wb=XLSX.utils.book_new();
+  const wsH=XLSX.utils.aoa_to_sheet(buildSheetData('H'));
+  const wsP=XLSX.utils.aoa_to_sheet(buildSheetData('P15'));
+  const wscols=[{wch:12},{wch:14},{wch:14},{wch:16},{wch:18},{wch:16},{wch:16},{wch:18}];
+  wsH['!cols']=wscols; wsP['!cols']=wscols;
+  XLSX.utils.book_append_sheet(wb,wsH,'H Recon');
+  XLSX.utils.book_append_sheet(wb,wsP,'P15 Recon');
+  XLSX.writeFile(wb,'Recon_Engine_Report.xlsx');
+}
+ 
+window.renderAll = function(){
   renderCalendar();
   renderDaySummary();
   renderEntryForm();
   renderLegend();
   renderTrends();
+  renderMonthly();
   renderShare();
-}
-renderAll();
+};
+ 
+window.initApp = function(){
+  document.getElementById('loading_overlay').style.display='none';
+  renderAll();
+};
 </script>
 </body>
 </html>
